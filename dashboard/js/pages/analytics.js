@@ -105,7 +105,6 @@ const AnalyticsPage = (() => {
     const m = gd.metrics?.data || gd.metrics || {};
     const r = gd.retention?.data || gd.retention || {};
 
-    // Try to extract scalar totals from various GA response shapes
     const dau  = m.dau ?? m.DAU ?? sumLast(m, 'dau', 1);
     const mau  = m.mau ?? m.MAU ?? sumLast(m, 'mau', 30);
     const sess = m.sessions ?? sumLast(m, 'sessions', 30);

@@ -1,6 +1,6 @@
 const Auth = (() => {
   const SESSION_KEY = 'tcc_session';
-  const TTL = 24 * 60 * 60 * 1000; // 24 h
+  const TTL = 24 * 60 * 60 * 1000;
 
   return {
     isLoggedIn() {

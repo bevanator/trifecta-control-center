@@ -32,38 +32,28 @@ const AnalyticsAPI = (() => {
     return res.json();
   }
 
-  function dateStr(d) {
-    return d.toISOString().split('T')[0];
-  }
-
   return {
     async getMetrics(gameKey, secretKey) {
       const now = new Date();
       const d30ago = new Date(now - 30 * 86400000);
-      const d7ago  = new Date(now - 7  * 86400000);
-      const d1ago  = new Date(now - 1  * 86400000);
-
       const body = {
-        start_ts: Math.floor(d30ago / 1000),
-        end_ts:   Math.floor(now / 1000),
+        start_ts:   Math.floor(d30ago / 1000),
+        end_ts:     Math.floor(now / 1000),
         dimensions: ['day'],
-        metrics: ['dau', 'mau', 'sessions', 'session_length']
+        metrics:    ['dau', 'mau', 'sessions', 'session_length']
       };
-
-      const data = await request(gameKey, secretKey, '/metrics', body);
-      return data;
+      return request(gameKey, secretKey, '/metrics', body);
     },
 
     async getRetention(gameKey, secretKey) {
       const now = new Date();
       const d30ago = new Date(now - 30 * 86400000);
       const body = {
-        start_ts: Math.floor(d30ago / 1000),
-        end_ts:   Math.floor(now / 1000),
+        start_ts:   Math.floor(d30ago / 1000),
+        end_ts:     Math.floor(now / 1000),
         dimensions: ['retention_day']
       };
-      const data = await request(gameKey, secretKey, '/retention', body);
-      return data;
+      return request(gameKey, secretKey, '/retention', body);
     }
   };
 })();

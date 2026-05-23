@@ -1,4 +1,9 @@
-// ── Coming Soon page (inline — no separate file needed) ──
+if (typeof CONFIG === 'undefined') {
+  document.body.innerHTML = '<h2>config.js not found. Copy config.example.js to config.js and fill in credentials.</h2>';
+  throw new Error('CONFIG not defined');
+}
+
+// ── Coming Soon page ──────────────────────────────────────
 const ComingSoonPage = {
   render(container) {
     container.innerHTML = `
@@ -6,7 +11,7 @@ const ComingSoonPage = {
         <div class="empty-state" style="padding-top:80px">
           <div class="empty-state-icon" style="font-size:44px">◎</div>
           <h2>Coming Soon</h2>
-          <p>Leave management is under construction and will be available in a future update.</p>
+          <p>This section is under construction and will be available in a future update.</p>
         </div>
       </div>`;
   }
@@ -17,18 +22,11 @@ const App = (() => {
     assets:      AssetsPage,
     credentials: CredentialsPage,
     analytics:   AnalyticsPage,
-    leave:       ComingSoonPage   // still handles direct #leave navigation
+    leave:       ComingSoonPage
   };
 
-  // ── Init ──────────────────────────────────────────────
   function init() {
-    if (typeof CONFIG === 'undefined') {
-      document.body.innerHTML = '<p>config.js not found</p>';
-      throw new Error('No config');
-    }
-
     initDarkMode();
-
     if (Auth.isLoggedIn()) {
       showApp();
     } else {
@@ -36,10 +34,8 @@ const App = (() => {
     }
   }
 
-  // ── Dark mode ─────────────────────────────────────────
   function initDarkMode() {
-    const saved = localStorage.getItem('tcc_theme');
-    if (saved === 'dark') {
+    if (localStorage.getItem('tcc_theme') === 'dark') {
       document.documentElement.classList.add('dark');
     }
     updateToggleLabel();
@@ -48,11 +44,9 @@ const App = (() => {
   function updateToggleLabel() {
     const btn = document.getElementById('theme-toggle');
     if (!btn) return;
-    const isDark = document.documentElement.classList.contains('dark');
-    btn.textContent = isDark ? '☀ Light mode' : '☾ Dark mode';
+    btn.textContent = document.documentElement.classList.contains('dark') ? '☀ Light mode' : '☾ Dark mode';
   }
 
-  // ── Login ─────────────────────────────────────────────
   function showLogin() {
     const overlay = document.getElementById('login-overlay');
     overlay.removeAttribute('hidden');
@@ -72,7 +66,6 @@ const App = (() => {
     });
   }
 
-  // ── App ───────────────────────────────────────────────
   function showApp() {
     document.getElementById('login-overlay').setAttribute('hidden', '');
     document.getElementById('app').removeAttribute('hidden');
@@ -97,8 +90,7 @@ const App = (() => {
 
     document.getElementById('theme-toggle').addEventListener('click', () => {
       document.documentElement.classList.toggle('dark');
-      const isDark = document.documentElement.classList.contains('dark');
-      localStorage.setItem('tcc_theme', isDark ? 'dark' : 'light');
+      localStorage.setItem('tcc_theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
       updateToggleLabel();
     });
   }
@@ -116,7 +108,6 @@ const App = (() => {
     PAGES[page].render(content);
   }
 
-  // ── Modal ─────────────────────────────────────────────
   function showModal(title, bodyHtml, buttons = [], wide = false) {
     const overlay = document.getElementById('modal-overlay');
     const modal   = document.getElementById('modal');
@@ -144,7 +135,6 @@ const App = (() => {
     document.getElementById('modal-overlay').setAttribute('hidden', '');
   }
 
-  // ── Toast ─────────────────────────────────────────────
   function toast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     const el = document.createElement('div');

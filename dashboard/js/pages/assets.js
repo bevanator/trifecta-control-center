@@ -1,9 +1,8 @@
 const AssetsPage = (() => {
-  let _assets = [];   // { name, info_file_id, info }
+  let _assets = [];
   let _filter = '';
   let _tagFilter = '';
 
-  // ── Render ────────────────────────────────────────────
   async function render(container) {
     container.innerHTML = `
       <div class="page">
@@ -63,8 +62,7 @@ const AssetsPage = (() => {
   function renderTagFilters() {
     const wrap = document.getElementById('tag-filters');
     if (!wrap) return;
-    const tags = allTags();
-    wrap.innerHTML = tags.map(t =>
+    wrap.innerHTML = allTags().map(t =>
       `<span class="tag-filter${_tagFilter === t ? ' active' : ''}" data-tag="${t}">${t}</span>`
     ).join('');
     wrap.querySelectorAll('.tag-filter').forEach(el => {
@@ -128,17 +126,11 @@ const AssetsPage = (() => {
     });
   }
 
-  // ── Detail modal ──────────────────────────────────────
   async function showDetail(asset) {
     const info = asset.info || {};
-    const latestPkg = (info.packages || [])[0];
 
     const screenshotsHtml = (info.screenshots || []).map((_, i) =>
       `<img class="screenshot-thumb" id="ss-${i}" src="" alt="screenshot">`
-    ).join('');
-
-    const pkgOptions = (info.packages || []).map((p, i) =>
-      `<option value="${i}">v${esc(p.version)}</option>`
     ).join('');
 
     const tagsHtml = (info.tags || []).map(t => `<span class="badge badge-tag">${esc(t)}</span>`).join(' ');
@@ -169,7 +161,6 @@ const AssetsPage = (() => {
       { label: 'Close', cls: 'btn-secondary', action: () => App.closeModal() }
     ]);
 
-    // Load cover
     if (info.cover) {
       Drive.getImageBlobUrl(info.cover).then(url => {
         const el = document.getElementById('detail-cover');
@@ -177,7 +168,6 @@ const AssetsPage = (() => {
       });
     }
 
-    // Load screenshots
     (info.screenshots || []).forEach((id, i) => {
       Drive.getImageBlobUrl(id).then(url => {
         const el = document.getElementById(`ss-${i}`);
@@ -185,7 +175,6 @@ const AssetsPage = (() => {
       });
     });
 
-    // Download buttons
     document.querySelectorAll('[data-fileid]').forEach(btn => {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
@@ -205,7 +194,6 @@ const AssetsPage = (() => {
     });
   }
 
-  // ── Add / Edit modal ──────────────────────────────────
   function buildAssetForm(existing = null) {
     const info = existing?.info || {};
     const packages = info.packages || [{ version: '', file_id: '', notes: '' }];
@@ -242,7 +230,7 @@ const AssetsPage = (() => {
       <div class="form-group">
         <label class="form-label">Cover Image ${existing ? '(upload to replace)' : ''}</label>
         <input class="form-input" type="file" id="af-cover" accept="image/*">
-        ${existing && info.cover ? '<p class="form-hint">Current cover will keep if no new file selected.</p>' : ''}
+        ${existing && info.cover ? '<p class="form-hint">Current cover kept if no new file selected.</p>' : ''}
       </div>
       <div class="form-group">
         <label class="form-label">Screenshots ${existing ? '(upload to replace all)' : ''}</label>
@@ -332,7 +320,6 @@ const AssetsPage = (() => {
         const imgFolder = await Drive.createFolder('images', assetFolderId);
         imagesFolderId = imgFolder.id;
       } else {
-        // Reuse existing folder structure — find by listing root
         const folders = await Drive.listFolder(rootId);
         const af = folders.find(f => f.name === name && f.mimeType === 'application/vnd.google-apps.folder');
         if (!af) throw new Error('Asset folder not found on Drive');
@@ -348,7 +335,6 @@ const AssetsPage = (() => {
 
       const info = existing?.info ? { ...existing.info } : {};
 
-      // Cover
       const coverFile = document.getElementById('af-cover').files[0];
       if (coverFile) {
         btn.textContent = 'Uploading cover…';
@@ -356,7 +342,6 @@ const AssetsPage = (() => {
         info.cover = uploaded.id;
       }
 
-      // Screenshots
       const ssFiles = [...document.getElementById('af-screenshots').files];
       if (ssFiles.length) {
         btn.textContent = 'Uploading screenshots…';
@@ -364,7 +349,6 @@ const AssetsPage = (() => {
         info.screenshots = ssIds;
       }
 
-      // Packages
       const pkgEntries = [...document.querySelectorAll('.package-entry')];
       btn.textContent = 'Uploading packages…';
       const packages = [];
@@ -384,7 +368,6 @@ const AssetsPage = (() => {
         packages.push({ version, file_id: fileId, notes });
       }
 
-      // Build info.json
       info.name        = name;
       info.publisher   = document.getElementById('af-publisher').value.trim();
       info.description = document.getElementById('af-desc').value.trim();
@@ -394,7 +377,6 @@ const AssetsPage = (() => {
       info.price_usd = priceVal !== '' ? Number(priceVal) : null;
       info.packages  = packages;
 
-      // Upload info.json
       btn.textContent = 'Saving metadata…';
       const infoBlob = new Blob([JSON.stringify(info, null, 2)], { type: 'application/json' });
 
@@ -404,7 +386,6 @@ const AssetsPage = (() => {
         const uploaded = await Drive.uploadFile('info.json', infoBlob, assetFolderId);
         existingInfoFileId = uploaded.id;
 
-        // Add to gist index
         const index = await GitHub.readGist(CONFIG.GIST_INDEX_ID, 'index.json');
         index.assets.push({ name, info_file_id: existingInfoFileId });
         await GitHub.writeGist(CONFIG.GIST_INDEX_ID, 'index.json', index);
@@ -420,7 +401,6 @@ const AssetsPage = (() => {
     }
   }
 
-  // ── Helpers ───────────────────────────────────────────
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function sanitize(s) { return s.replace(/[^a-z0-9]/gi, '_'); }
 
