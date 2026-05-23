@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trifecta Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ── Login overlay ─────────────────────────────────────── -->
+<div id="login-overlay">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-mark">T</div>
+      <h1>Trifecta Control Center</h1>
+      <p>Studio internal dashboard</p>
+    </div>
+    <form id="login-form">
+      <div class="form-group">
+        <label class="form-label" for="login-password">Admin Password</label>
+        <input class="form-input" type="password" id="login-password" autofocus placeholder="Enter password…">
+      </div>
+      <span id="login-error"></span>
+      <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center">Sign In</button>
+    </form>
+  </div>
+</div>
+
+<!-- ── App shell ─────────────────────────────────────────── -->
+<div id="app" hidden>
+  <aside id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark">T</div>
+      <div class="sidebar-brand-text">
+        <span class="sidebar-brand-name">Trifecta CC</span>
+        <span class="sidebar-brand-sub">Studio Dashboard</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <span class="nav-section-label">Studio</span>
+      <a class="nav-item" data-page="assets" href="#assets">
+        <span class="nav-icon">⬡</span> Assets
+      </a>
+      <a class="nav-item" data-page="credentials" href="#credentials">
+        <span class="nav-icon">⊛</span> Credentials
+      </a>
+      <a class="nav-item" data-page="analytics" href="#analytics">
+        <span class="nav-icon">▣</span> Analytics
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button id="theme-toggle" class="btn btn-ghost">☾ Dark mode</button>
+      <hr class="divider">
+      <button id="logout-btn" class="btn btn-ghost">↩ Logout</button>
+    </div>
+  </aside>
+
+  <main id="content">
+    <div class="loading">Loading…</div>
+  </main>
+</div>
+
+<!-- ── Modal ─────────────────────────────────────────────── -->
+<div id="modal-overlay" hidden>
+  <div id="modal"></div>
+</div>
+
+<!-- ── Toasts ────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<!-- ── Scripts ───────────────────────────────────────────── -->
+<script src="../config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bcryptjs/2.4.3/bcrypt.min.js"
+        integrity="sha512-V819+PT9svkebPangTX1YC287lXTDI90BnxTVKUMBFkJKjHloMoNsbu9ej6MvO7H0gu3FHTwLAEICCeVipFzg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="js/auth.js"></script>
+<script src="js/github.js"></script>
+<script src="js/drive.js"></script>
+<script src="js/analytics-api.js"></script>
+<script src="js/pages/assets.js"></script>
+<script src="js/pages/credentials.js"></script>
+<script src="js/pages/analytics.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
