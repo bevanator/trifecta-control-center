@@ -10,7 +10,6 @@ permissions:
   pages: write
   id-token: write
 
-# Only one deployment runs at a time; in-progress deploy is cancelled on new push
 concurrency:
   group: github-pages
   cancel-in-progress: true
@@ -26,9 +25,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Bake all secrets into config.js at build time.
-      # Python handles JSON escaping correctly (private key newlines, etc.)
-      - name: Generate config.js from secrets
+      # Generates config.js in the repo root from secrets.
+      # Uses a committed script to avoid heredoc/escaping issues in YAML.
+      - name: Generate config.js
         env:
           ADMIN_PASSWORD:       ${{ secrets.ADMIN_PASSWORD }}
           TCC_PAT:              ${{ secrets.TCC_PAT }}
@@ -38,47 +37,35 @@ jobs:
           DRIVE_ROOT_FOLDER_ID: ${{ secrets.DRIVE_ROOT_FOLDER_ID }}
           SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           GAMES_JSON:           ${{ secrets.GAMES_JSON }}
+        run: python3 scripts/generate_config.py
+
+      # Abort now if config.js is missing — no point deploying a broken site.
+      - name: Verify config.js exists
         run: |
-          python3 << 'PYEOF'
-          import os, json, sys
+          if [ ! -f config.js ]; then
+            echo "::error::config.js was not generated. Check the previous step."
+            exit 1
+          fi
+          BYTES=$(wc -c < config.js)
+          echo "config.js verified: ${BYTES} bytes"
+          # Print first line only (avoids leaking secrets in logs)
+          head -1 config.js
 
-          def require(key):
-              val = os.environ.get(key, '').strip()
-              if not val:
-                  print(f'ERROR: secret {key} is empty or missing', file=sys.stderr)
-                  sys.exit(1)
-              return val
-
-          try:
-              service_account = json.loads(require('SERVICE_ACCOUNT_JSON'))
-          except json.JSONDecodeError as e:
-              print(f'ERROR: SERVICE_ACCOUNT_JSON is not valid JSON: {e}', file=sys.stderr)
-              sys.exit(1)
-
-          try:
-              games = json.loads(require('GAMES_JSON'))
-          except json.JSONDecodeError as e:
-              print(f'ERROR: GAMES_JSON is not valid JSON: {e}', file=sys.stderr)
-              sys.exit(1)
-
-          config = {
-              'ADMIN_PASSWORD':       require('ADMIN_PASSWORD'),
-              'GITHUB_PAT':           require('TCC_PAT'),
-              'GIST_CREDENTIALS_ID':  require('GIST_CREDENTIALS_ID'),
-              'GIST_INDEX_ID':        require('GIST_INDEX_ID'),
-              'GIST_LEAVE_ID':        os.environ.get('GIST_LEAVE_ID', ''),
-              'DRIVE_ROOT_FOLDER_ID': require('DRIVE_ROOT_FOLDER_ID'),
-              'SERVICE_ACCOUNT':      service_account,
-              'GAMES':                games,
-          }
-
-          with open('config.js', 'w') as f:
-              f.write('const CONFIG = ')
-              json.dump(config, f, indent=2, ensure_ascii=False)
-              f.write(';\n')
-
-          print('config.js generated successfully')
-          PYEOF
+      # Assemble an explicit _site/ directory so we control exactly what
+      # gets deployed — no surprises from uploading the whole repo root.
+      - name: Assemble deployment directory
+        run: |
+          mkdir -p _site
+          cp index.html        _site/
+          cp config.js         _site/
+          cp config.example.js _site/
+          cp -r dashboard      _site/dashboard
+          echo "--- _site/ ---"
+          ls -la _site/
+          echo "--- _site/dashboard/ ---"
+          ls -la _site/dashboard/
+          echo "--- _site/dashboard/js/ ---"
+          ls -la _site/dashboard/js/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -86,7 +73,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
       - name: Deploy to GitHub Pages
         id: deploy

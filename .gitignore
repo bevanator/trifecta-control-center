@@ -3,3 +3,4 @@ service-account.json
 *.private.*
 .DS_Store
 Thumbs.db
+_site/
