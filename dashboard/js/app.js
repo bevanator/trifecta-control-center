@@ -22,18 +22,12 @@ const App = (() => {
 
   // ── Init ──────────────────────────────────────────────
   function init() {
-    initDarkMode();
-
     if (typeof CONFIG === 'undefined') {
-      document.body.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;height:100vh;
-             flex-direction:column;gap:16px;font-family:system-ui;color:#0f172a">
-          <div style="font-size:44px">⚠</div>
-          <div style="font-size:18px;font-weight:700">config.js not found</div>
-          <div style="color:#64748b;font-size:14px">Copy config.example.js to config.js and fill in your credentials.</div>
-        </div>`;
-      return;
+      document.body.innerHTML = '<p>config.js not found</p>';
+      throw new Error('No config');
     }
+
+    initDarkMode();
 
     if (Auth.isLoggedIn()) {
       showApp();
