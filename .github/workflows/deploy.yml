@@ -53,19 +53,20 @@ jobs:
 
       # Assemble an explicit _site/ directory so we control exactly what
       # gets deployed — no surprises from uploading the whole repo root.
+      # config.js goes inside dashboard/ so the script tag (src="config.js")
+      # loads it from the same directory — no path traversal, no ambiguity.
       - name: Assemble deployment directory
         run: |
           mkdir -p _site
           cp index.html        _site/
-          cp config.js         _site/
           cp config.example.js _site/
           cp -r dashboard      _site/dashboard
+          cp config.js         _site/dashboard/config.js
           echo "--- _site/ ---"
           ls -la _site/
           echo "--- _site/dashboard/ ---"
           ls -la _site/dashboard/
-          echo "--- _site/dashboard/js/ ---"
-          ls -la _site/dashboard/js/
+          echo "--- config.js present: $(test -f _site/dashboard/config.js && echo YES || echo NO) ---"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
