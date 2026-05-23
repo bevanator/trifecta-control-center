@@ -57,10 +57,10 @@ jobs:
       # loads it from the same directory — no path traversal, no ambiguity.
       - name: Assemble deployment directory
         run: |
-          mkdir -p _site
+          mkdir -p _site/dashboard
           cp index.html        _site/
           cp config.example.js _site/
-          cp -r dashboard      _site/dashboard
+          cp -r dashboard/*    _site/dashboard/
           cp config.js         _site/dashboard/config.js
           echo "--- _site/ ---"
           ls -la _site/
