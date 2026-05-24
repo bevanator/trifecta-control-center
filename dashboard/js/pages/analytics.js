@@ -24,10 +24,12 @@ const AnalyticsPage = (() => {
     const games = CONFIG.GAMES || [];
     if (!games.length) {
       container.innerHTML = `
-        <div class="page">
-          <div class="page-title">Analytics</div>
+        <div class="topbar">
+          <span class="topbar-title">Analytics</span>
+        </div>
+        <div class="content">
           <div class="empty-state">
-            <div class="empty-state-icon">▣</div>
+            <i class="ti ti-chart-bar"></i>
             <p>No games configured. Add entries to CONFIG.GAMES in config.js.</p>
           </div>
         </div>`;
@@ -35,20 +37,20 @@ const AnalyticsPage = (() => {
     }
 
     container.innerHTML = `
-      <div class="page">
-        <div class="page-header">
-          <div>
-            <div class="page-title">Analytics</div>
-            <div class="page-subtitle">GameAnalytics data — last 30 days</div>
-          </div>
-          <button class="btn btn-secondary" id="refresh-btn">↻ Refresh</button>
+      <div class="topbar">
+        <div>
+          <span class="topbar-title">Analytics</span>
+          <span class="topbar-count">Last 30 days</span>
         </div>
-        <div class="game-tabs" id="game-tabs">
-          ${games.map((g, i) =>
-            `<button class="game-tab${i===_activeGame?' active':''}" data-gi="${i}">${esc(g.name)}</button>`
-          ).join('')}
-        </div>
-        <div id="analytics-content"><div class="loading">Loading metrics…</div></div>
+        <button class="btn" id="refresh-btn"><i class="ti ti-refresh"></i> Refresh</button>
+      </div>
+      <div class="game-tabs" id="game-tabs">
+        ${games.map((g, i) =>
+          `<button class="game-tab${i===_activeGame?' active':''}" data-gi="${i}">${esc(g.name)}</button>`
+        ).join('')}
+      </div>
+      <div class="content" id="analytics-content">
+        <div class="loading">Loading metrics…</div>
       </div>`;
 
     document.getElementById('refresh-btn').addEventListener('click', () => fetchGame(_activeGame));
@@ -92,8 +94,10 @@ const AnalyticsPage = (() => {
     if (gd.error) {
       content.innerHTML = `
         <div class="card">
-          <div class="card-header"><div class="card-title text-danger">API Error</div></div>
-          <p style="font-size:13px;color:var(--text-muted)">${esc(gd.error)}</p>
+          <div class="card-header">
+            <div class="card-title text-danger">API Error</div>
+          </div>
+          <p style="font-size:13px;color:var(--text-secondary)">${esc(gd.error)}</p>
           <p class="form-hint mt-1">
             GameAnalytics REST API may require specific endpoint configuration.
             Check the GA documentation for your plan's query API endpoints.

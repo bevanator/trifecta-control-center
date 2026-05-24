@@ -1,6 +1,9 @@
 const Drive = (() => {
   let _token = null;
   let _tokenExpiry = 0;
+  let _folderCache = {}; // { folderId: { files, ts } }
+  let _blobCache   = {}; // { fileId: objectUrl }
+  const CACHE_TTL = 5 * 60 * 1000;
 
   function b64url(str) {
     return btoa(str).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
@@ -60,34 +63,73 @@ const Drive = (() => {
   }
 
   async function authHeaders() {
-    const token = await getToken();
-    return { Authorization: `Bearer ${token}` };
+    return { Authorization: `Bearer ${await getToken()}` };
   }
 
   return {
-    async readJsonFile(fileId) {
+    async listFilesInFolder(folderId, { forceRefresh = false } = {}) {
+      const cached = _folderCache[folderId];
+      if (!forceRefresh && cached && Date.now() - cached.ts < CACHE_TTL) {
+        return cached.files;
+      }
       const h = await authHeaders();
+      const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
       const res = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType)&pageSize=200`,
         { headers: h }
       );
-      if (!res.ok) throw new Error(`Drive read failed: ${res.status}`);
-      return res.json();
+      if (!res.ok) throw new Error(`List folder failed: ${res.status}`);
+      const d = await res.json();
+      const files = d.files || [];
+      _folderCache[folderId] = { files, ts: Date.now() };
+      return files;
+    },
+
+    invalidateCache(folderId) {
+      if (folderId) delete _folderCache[folderId];
+      else _folderCache = {};
+    },
+
+    findCover(files) {
+      return files.find(f => /^cover\.(png|jpe?g)$/i.test(f.name)) || null;
+    },
+
+    findScreenshots(files) {
+      return files.filter(f =>
+        !/^cover\.(png|jpe?g)$/i.test(f.name) &&
+        /\.(png|jpe?g|gif|webp)$/i.test(f.name)
+      );
+    },
+
+    findPackages(files) {
+      return files.filter(f => /\.unitypackage$/i.test(f.name));
     },
 
     async getImageBlobUrl(fileId) {
+      if (_blobCache[fileId]) return _blobCache[fileId];
       const h = await authHeaders();
       const res = await fetch(
         `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
         { headers: h }
       );
       if (!res.ok) return null;
-      return URL.createObjectURL(await res.blob());
+      const url = URL.createObjectURL(await res.blob());
+      _blobCache[fileId] = url;
+      return url;
     },
 
-    async getDownloadUrl(fileId) {
+    async getFileDownloadUrl(fileId) {
       const token = await getToken();
       return `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&access_token=${encodeURIComponent(token)}`;
+    },
+
+    async trashFolder(folderId) {
+      const h = await authHeaders();
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${folderId}`,
+        { method: 'DELETE', headers: h }
+      );
+      if (!res.ok && res.status !== 204) throw new Error(`Drive delete failed: ${res.status}`);
     },
 
     async createFolder(name, parentId) {
@@ -99,42 +141,6 @@ const Drive = (() => {
       });
       if (!res.ok) throw new Error(`Create folder failed: ${res.status}`);
       return res.json();
-    },
-
-    async uploadFile(name, blob, folderId) {
-      const h = await authHeaders();
-      const meta = JSON.stringify({ name, parents: [folderId] });
-      const form = new FormData();
-      form.append('metadata', new Blob([meta], { type: 'application/json' }));
-      form.append('file', blob instanceof Blob ? blob : new Blob([blob]));
-      const res = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
-        { method: 'POST', headers: h, body: form }
-      );
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      return res.json();
-    },
-
-    async updateFile(fileId, blob) {
-      const h = await authHeaders();
-      const res = await fetch(
-        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
-        { method: 'PATCH', headers: { ...h, 'Content-Type': 'application/json' }, body: blob }
-      );
-      if (!res.ok) throw new Error(`Update file failed: ${res.status}`);
-      return res.json();
-    },
-
-    async listFolder(folderId) {
-      const h = await authHeaders();
-      const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
-      const res = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType)&pageSize=200`,
-        { headers: h }
-      );
-      if (!res.ok) throw new Error(`List folder failed: ${res.status}`);
-      const d = await res.json();
-      return d.files || [];
     }
   };
 })();

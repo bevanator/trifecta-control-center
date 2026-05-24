@@ -1,29 +1,35 @@
 const CredentialsPage = (() => {
   let _users = [];
 
-  const AVATAR_COLORS = [
-    '#8b5cf6','#3b82f6','#22c55e','#f59e0b','#ef4444','#06b6d4','#ec4899','#84cc16'
-  ];
-
-  function avatarColor(username) {
-    let hash = 0;
-    for (const c of username) hash = (hash * 31 + c.charCodeAt(0)) & 0xffffffff;
-    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-  }
-
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   async function render(container) {
     container.innerHTML = `
-      <div class="page">
-        <div class="page-header">
-          <div>
-            <div class="page-title">Credentials</div>
-            <div class="page-subtitle">Team logins for the Unity Asset Manager tool</div>
+      <div class="topbar">
+        <div>
+          <span class="topbar-title">Team credentials</span>
+          <span class="topbar-count" id="creds-count"></span>
+        </div>
+        <button class="btn btn-primary" id="add-user-btn">
+          <i class="ti ti-user-plus"></i> Add user
+        </button>
+      </div>
+      <div class="content">
+        <div class="stat-grid" id="creds-stats" style="display:none">
+          <div class="stat-card">
+            <div class="stat-label">Total users</div>
+            <div class="stat-value" id="stat-total">—</div>
           </div>
-          <button class="btn btn-primary" id="add-user-btn">+ Add User</button>
+          <div class="stat-card">
+            <div class="stat-label">Admins</div>
+            <div class="stat-value" id="stat-admins">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Developers</div>
+            <div class="stat-value" id="stat-devs">—</div>
+          </div>
         </div>
         <div id="creds-body"><div class="loading">Loading…</div></div>
       </div>`;
@@ -38,17 +44,36 @@ const CredentialsPage = (() => {
       _users = data.users || [];
       renderTable();
     } catch (err) {
-      document.getElementById('creds-body').innerHTML =
-        `<div class="empty-state"><p class="text-danger">Failed to load: ${esc(err.message)}</p></div>`;
+      document.getElementById('creds-body').innerHTML = `
+        <div class="empty-state">
+          <i class="ti ti-alert-circle"></i>
+          <p>Failed to load: ${esc(err.message)}</p>
+        </div>`;
     }
   }
 
   function renderTable() {
     const body = document.getElementById('creds-body');
+
+    const stats = document.getElementById('creds-stats');
+    const countEl = document.getElementById('creds-count');
+    if (stats && _users.length) {
+      stats.style.display = '';
+      document.getElementById('stat-total').textContent = _users.length;
+      document.getElementById('stat-admins').textContent = _users.filter(u => u.role === 'admin').length;
+      document.getElementById('stat-devs').textContent = _users.filter(u => u.role === 'dev').length;
+    }
+    if (countEl) countEl.textContent = _users.length ? `${_users.length} user${_users.length !== 1 ? 's' : ''}` : '';
+
     if (!_users.length) {
-      body.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⊛</div><p>No users yet. Add the first one.</p></div>`;
+      body.innerHTML = `
+        <div class="empty-state">
+          <i class="ti ti-users"></i>
+          <p>No users yet. Add the first one.</p>
+        </div>`;
       return;
     }
+
     body.innerHTML = `
       <div class="table-wrap">
         <table>
@@ -57,26 +82,19 @@ const CredentialsPage = (() => {
               <th>Username</th>
               <th>Role</th>
               <th>Added</th>
-              <th>Actions</th>
+              <th style="width:80px"></th>
             </tr>
           </thead>
           <tbody>
             ${_users.map((u, i) => `
               <tr>
-                <td>
-                  <div class="username-cell">
-                    <div class="avatar" style="background:${avatarColor(u.username)};color:#fff">
-                      ${esc(u.username[0].toUpperCase())}
-                    </div>
-                    <span>${esc(u.username)}</span>
-                  </div>
-                </td>
+                <td class="font-medium">${esc(u.username)}</td>
                 <td><span class="badge badge-${u.role}">${esc(u.role)}</span></td>
-                <td class="text-muted">${u.added ? new Date(u.added).toLocaleDateString() : '—'}</td>
+                <td class="text-muted">${u.added ? new Date(u.added).toLocaleDateString('en', {month:'short', year:'numeric'}) : '—'}</td>
                 <td>
-                  <div class="td-actions">
-                    <button class="btn btn-sm btn-secondary" data-edit="${i}">Edit</button>
-                    <button class="btn btn-sm btn-danger" data-del="${i}">Delete</button>
+                  <div class="actions">
+                    <button class="icon-btn" data-edit="${i}" title="Edit"><i class="ti ti-edit"></i></button>
+                    <button class="icon-btn icon-btn-danger" data-del="${i}" title="Delete"><i class="ti ti-trash"></i></button>
                   </div>
                 </td>
               </tr>`).join('')}
@@ -88,23 +106,23 @@ const CredentialsPage = (() => {
       btn.addEventListener('click', () => showUserModal(_users[+btn.dataset.edit]));
     });
     body.querySelectorAll('[data-del]').forEach(btn => {
-      btn.addEventListener('click', () => deleteUser(_users[+btn.dataset.del]));
+      btn.addEventListener('click', () => confirmDeleteUser(_users[+btn.dataset.del]));
     });
   }
 
   function showUserModal(existing) {
-    App.showModal(existing ? 'Edit User' : 'Add User', `
+    App.showModal(existing ? 'Edit user' : 'Add user', `
       <div class="form-group">
         <label class="form-label">Username *</label>
-        <input class="form-input" id="u-name" value="${esc(existing?.username || '')}" ${existing ? 'readonly' : ''} placeholder="lowercase, no spaces">
+        <input class="input" id="u-name" value="${esc(existing?.username || '')}" ${existing ? 'readonly' : ''} placeholder="lowercase, no spaces" style="width:100%">
       </div>
       <div class="form-group">
         <label class="form-label">${existing ? 'New Password (leave blank to keep current)' : 'Password *'}</label>
-        <input class="form-input" type="password" id="u-pass" autocomplete="new-password">
+        <input class="input" type="password" id="u-pass" autocomplete="new-password" style="width:100%">
       </div>
       <div class="form-group">
         <label class="form-label">Role</label>
-        <select class="form-select" id="u-role">
+        <select class="input" id="u-role" style="width:100%">
           <option value="dev" ${existing?.role === 'dev' ? 'selected' : ''}>dev</option>
           <option value="admin" ${existing?.role === 'admin' ? 'selected' : ''}>admin</option>
         </select>
@@ -153,11 +171,20 @@ const CredentialsPage = (() => {
     }
   }
 
+  function confirmDeleteUser(user) {
+    App.showModal('Remove user?', `
+      <div class="modal-sub">${esc(user.username)} will lose access immediately. This cannot be undone.</div>
+    `, [
+      { label: 'Cancel', cls: 'btn-secondary', action: () => App.closeModal() },
+      { label: 'Remove', cls: 'btn-danger', action: () => deleteUser(user) }
+    ]);
+  }
+
   async function deleteUser(user) {
-    if (!confirm(`Delete user "${user.username}"? This cannot be undone.`)) return;
     try {
       _users = _users.filter(u => u.username !== user.username);
       await GitHub.writeGist(CONFIG.GIST_CREDENTIALS_ID, 'credentials.json', { users: _users });
+      App.closeModal();
       App.toast(`User "${user.username}" deleted`, 'success');
       renderTable();
     } catch (err) {

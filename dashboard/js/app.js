@@ -1,5 +1,5 @@
 if (typeof CONFIG === 'undefined') {
-  document.body.innerHTML = '<h2>config.js not found. Copy config.example.js to config.js and fill in credentials.</h2>';
+  document.body.innerHTML = '<h2 style="padding:40px;font-family:sans-serif">config.js not found. Copy config.example.js to config.js and fill in credentials.</h2>';
   throw new Error('CONFIG not defined');
 }
 
@@ -7,10 +7,12 @@ if (typeof CONFIG === 'undefined') {
 const ComingSoonPage = {
   render(container) {
     container.innerHTML = `
-      <div class="page">
-        <div class="empty-state" style="padding-top:80px">
-          <div class="empty-state-icon" style="font-size:44px">◎</div>
-          <h2>Coming Soon</h2>
+      <div class="topbar">
+        <span class="topbar-title">Coming Soon</span>
+      </div>
+      <div class="content">
+        <div class="empty-state" style="padding-top:60px">
+          <i class="ti ti-clock"></i>
           <p>This section is under construction and will be available in a future update.</p>
         </div>
       </div>`;
@@ -25,6 +27,13 @@ const App = (() => {
     leave:       ComingSoonPage
   };
 
+  const TOAST_ICONS = {
+    success: 'ti-circle-check',
+    error:   'ti-circle-x',
+    info:    'ti-info-circle',
+    warning: 'ti-alert-triangle'
+  };
+
   function init() {
     initDarkMode();
     if (Auth.isLoggedIn()) {
@@ -36,30 +45,32 @@ const App = (() => {
 
   function initDarkMode() {
     if (localStorage.getItem('tcc_theme') === 'dark') {
-      document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
     }
     updateToggleLabel();
   }
 
   function updateToggleLabel() {
-    const btn = document.getElementById('theme-toggle');
-    if (!btn) return;
-    btn.textContent = document.documentElement.classList.contains('dark') ? '☀ Light mode' : '☾ Dark mode';
+    const icon  = document.getElementById('theme-icon');
+    const label = document.getElementById('theme-label');
+    if (!icon || !label) return;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    icon.className = `ti ${isDark ? 'ti-sun' : 'ti-moon'}`;
+    label.textContent = isDark ? 'Light mode' : 'Dark mode';
   }
 
   function showLogin() {
-    const overlay = document.getElementById('login-overlay');
-    overlay.removeAttribute('hidden');
+    document.getElementById('login-page').removeAttribute('hidden');
     document.getElementById('app').setAttribute('hidden', '');
 
     document.getElementById('login-form').addEventListener('submit', e => {
       e.preventDefault();
       const pw = document.getElementById('login-password').value;
       if (Auth.login(pw)) {
-        overlay.setAttribute('hidden', '');
+        document.getElementById('login-page').setAttribute('hidden', '');
         showApp();
       } else {
-        document.getElementById('login-error').textContent = 'Invalid password.';
+        document.getElementById('login-error').textContent = 'Incorrect password.';
         document.getElementById('login-password').value = '';
         document.getElementById('login-password').focus();
       }
@@ -67,7 +78,7 @@ const App = (() => {
   }
 
   function showApp() {
-    document.getElementById('login-overlay').setAttribute('hidden', '');
+    document.getElementById('login-page').setAttribute('hidden', '');
     document.getElementById('app').removeAttribute('hidden');
     setupNav();
 
@@ -89,8 +100,14 @@ const App = (() => {
     });
 
     document.getElementById('theme-toggle').addEventListener('click', () => {
-      document.documentElement.classList.toggle('dark');
-      localStorage.setItem('tcc_theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      if (isDark) {
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.setItem('tcc_theme', 'light');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        localStorage.setItem('tcc_theme', 'dark');
+      }
       updateToggleLabel();
     });
   }
@@ -103,9 +120,10 @@ const App = (() => {
       link.classList.toggle('active', link.dataset.page === page);
     });
 
-    const content = document.getElementById('content');
-    content.scrollTop = 0;
-    PAGES[page].render(content);
+    const container = document.getElementById('content');
+    PAGES[page].render(container);
+    const scrollEl = container.querySelector('.content');
+    if (scrollEl) scrollEl.scrollTop = 0;
   }
 
   function showModal(title, bodyHtml, buttons = [], wide = false) {
@@ -114,9 +132,9 @@ const App = (() => {
 
     modal.className = `modal${wide ? ' modal-lg' : ''}`;
     modal.innerHTML = `
-      <div class="modal-header">
-        <span class="modal-title">${title}</span>
-        <button class="btn-close" id="modal-close-btn">✕</button>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
+        <div class="modal-title">${title}</div>
+        <button class="icon-btn" id="modal-close-btn" style="flex-shrink:0;margin-left:8px"><i class="ti ti-x"></i></button>
       </div>
       <div class="modal-body">${bodyHtml}</div>
       <div class="modal-footer">
@@ -136,11 +154,16 @@ const App = (() => {
   }
 
   function toast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
+    const stack = document.getElementById('toast-stack');
     const el = document.createElement('div');
     el.className = `toast toast-${type}`;
-    el.textContent = message;
-    container.appendChild(el);
+    const icon = TOAST_ICONS[type] || 'ti-info-circle';
+    el.innerHTML = `
+      <i class="ti ${icon} toast-icon"></i>
+      <div class="toast-body"><div class="toast-title">${message}</div></div>
+      <i class="ti ti-x toast-close"></i>`;
+    el.querySelector('.toast-close').addEventListener('click', () => el.remove());
+    stack.appendChild(el);
     setTimeout(() => el.remove(), 4000);
   }
 

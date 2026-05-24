@@ -1,0 +1,271 @@
+<!-- TCC Markup Reference — class names and HTML structure for every component -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+
+<!--
+  ============================================================
+  COMPONENT REFERENCE BELOW — shows every component rendered
+  ============================================================
+-->
+
+<div style="padding: 24px; display: flex; flex-direction: column; gap: 32px; max-width: 900px; margin: 0 auto;">
+
+  <!-- Login -->
+  <div>
+    <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:12px;">Login screen</p>
+    <div style="background:var(--bg-tertiary);border-radius:var(--radius-xl);padding:32px;display:flex;align-items:center;justify-content:center;">
+      <div class="login-card">
+        <div class="login-mark">T</div>
+        <div class="login-title">Trifecta Control Center</div>
+        <div class="login-sub">Studio internal dashboard</div>
+        <div class="form-group">
+          <label class="form-label">Admin password</label>
+          <input class="input input-lg" type="password" placeholder="Enter password…" style="width:100%;" />
+        </div>
+        <div style="font-size:11px;color:var(--red-text);margin-bottom:10px;">Incorrect password</div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;">
+          <i class="ti ti-lock-open" aria-hidden="true"></i> Sign in
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Asset list -->
+  <div>
+    <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:12px;">Asset list</p>
+    <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg-primary);">
+      <div class="topbar">
+        <div class="topbar-title">Asset library <span class="topbar-count">4 assets</span></div>
+        <button class="btn btn-primary"><i class="ti ti-plus" aria-hidden="true"></i> Add asset</button>
+      </div>
+      <div class="filter-row">
+        <input class="input input-search" placeholder="Search assets…" />
+        <select class="input"><option>Name A–Z</option><option>Newest first</option><option>Ready first</option></select>
+      </div>
+      <!-- Row: 3+ images -->
+      <div class="asset-row">
+        <div class="asset-thumb thumb-blue">DP</div>
+        <div class="asset-info">
+          <div class="asset-name">DOTween Pro</div>
+          <div class="asset-pub">Demigiant</div>
+          <div class="asset-tags"><span class="tag">animation</span><span class="tag">tween</span></div>
+        </div>
+        <div class="img-strip">
+          <div class="img-preview"><img src="https://picsum.photos/seed/dt1/40/40" alt="" /></div>
+          <div class="img-preview"><img src="https://picsum.photos/seed/dt2/40/40" alt="" /></div>
+          <div class="img-more">+4</div>
+        </div>
+        <div class="vdivider"></div>
+        <span class="badge badge-ready"><i class="ti ti-check" aria-hidden="true"></i> Ready</span>
+        <div class="vdivider"></div>
+        <div class="actions">
+          <button class="icon-btn" title="Asset Store"><i class="ti ti-external-link" aria-hidden="true"></i></button>
+          <button class="icon-btn" title="Open Drive folder"><i class="ti ti-upload" aria-hidden="true"></i></button>
+          <button class="icon-btn" title="Refresh"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+          <button class="icon-btn" title="Edit"><i class="ti ti-edit" aria-hidden="true"></i></button>
+          <button class="icon-btn icon-btn-danger" title="Delete"><i class="ti ti-trash" aria-hidden="true"></i></button>
+        </div>
+      </div>
+      <!-- Row: 1 image -->
+      <div class="asset-row">
+        <div class="asset-thumb thumb-purple">OI</div>
+        <div class="asset-info">
+          <div class="asset-name">Odin Inspector</div>
+          <div class="asset-pub">Sirenix</div>
+          <div class="asset-tags"><span class="tag">editor</span><span class="tag">utility</span></div>
+        </div>
+        <div class="img-strip">
+          <div class="img-preview"><img src="https://picsum.photos/seed/oi1/40/40" alt="" /></div>
+          <div class="img-none"><i class="ti ti-photo-off" aria-hidden="true"></i></div>
+          <div style="width:40px;"></div>
+        </div>
+        <div class="vdivider"></div>
+        <span class="badge badge-ready"><i class="ti ti-check" aria-hidden="true"></i> Ready</span>
+        <div class="vdivider"></div>
+        <div class="actions">
+          <button class="icon-btn" title="Asset Store"><i class="ti ti-external-link" aria-hidden="true"></i></button>
+          <button class="icon-btn" title="Open Drive folder"><i class="ti ti-upload" aria-hidden="true"></i></button>
+          <button class="icon-btn" title="Refresh"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+          <button class="icon-btn" title="Edit"><i class="ti ti-edit" aria-hidden="true"></i></button>
+          <button class="icon-btn icon-btn-danger" title="Delete"><i class="ti ti-trash" aria-hidden="true"></i></button>
+        </div>
+      </div>
+      <!-- Row: 0 images, missing package -->
+      <div class="asset-row">
+        <div class="asset-thumb thumb-amber">F</div>
+        <div class="asset-info">
+          <div class="asset-name">Feel</div>
+          <div class="asset-pub">More Mountains</div>
+          <div class="asset-tags"><span class="tag">feedback</span><span class="tag">juice</span></div>
+        </div>
+        <div class="img-strip">
+          <div class="img-none"><i class="ti ti-photo-off" aria-hidden="true"></i></div>
+          <div style="width:40px;"></div>
+          <div style="width:40px;"></div>
+        </div>
+        <div class="vdivider"></div>
+        <span class="badge badge-missing"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Missing package</span>
+        <div class="vdivider"></div>
+        <div class="actions">
+          <button class="icon-btn dim" title="No Asset Store link"><i class="ti ti-external-link" aria-hidden="true"></i></button>
+          <button class="icon-btn" title="Open Drive folder"><i class="ti ti-upload" aria-hidden="true"></i></button>
+          <button class="icon-btn" title="Refresh"><i class="ti ti-refresh" aria-hidden="true"></i></button>
+          <button class="icon-btn" title="Edit"><i class="ti ti-edit" aria-hidden="true"></i></button>
+          <button class="icon-btn icon-btn-danger" title="Delete"><i class="ti ti-trash" aria-hidden="true"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add asset modal -->
+  <div>
+    <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:12px;">Add asset modal</p>
+    <div style="background:rgba(0,0,0,0.35);border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;min-height:420px;padding:24px;">
+      <div class="modal">
+        <div class="modal-title">Add asset</div>
+        <div class="modal-sub">A Drive folder will be created automatically. Upload files there after saving.</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Asset name</label><input class="input input-lg" style="width:100%;" placeholder="e.g. DOTween Pro" /></div>
+          <div class="form-group"><label class="form-label">Publisher</label><input class="input input-lg" style="width:100%;" placeholder="e.g. Demigiant" /></div>
+        </div>
+        <div class="form-group"><label class="form-label">Description</label><textarea class="input" style="width:100%;"></textarea></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Tags <span class="text-tertiary text-xs" style="font-weight:400;">comma separated</span></label><input class="input input-lg" style="width:100%;" placeholder="animation, tween" /></div>
+          <div class="form-group"><label class="form-label">Price (USD)</label><input class="input input-lg" style="width:100%;" type="number" placeholder="0 for free" /></div>
+        </div>
+        <div class="form-group"><label class="form-label">Asset Store URL</label><input class="input input-lg" style="width:100%;" placeholder="https://assetstore.unity.com/…" /></div>
+        <div class="modal-footer">
+          <button class="btn">Cancel</button>
+          <button class="btn btn-primary"><i class="ti ti-folder-plus" aria-hidden="true"></i> Create folder & save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm delete user modal -->
+  <div>
+    <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:12px;">Confirm delete user modal</p>
+    <div style="background:rgba(0,0,0,0.35);border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;min-height:220px;padding:24px;">
+      <div class="modal modal-sm">
+        <div class="modal-title">Remove user?</div>
+        <div class="modal-sub">dev_sakib will lose access to the asset browser immediately. This cannot be undone.</div>
+        <div class="modal-footer">
+          <button class="btn">Cancel</button>
+          <button class="btn btn-danger"><i class="ti ti-trash" aria-hidden="true"></i> Remove</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete asset modal — two choices -->
+  <div>
+    <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:12px;">Delete asset modal — two choices</p>
+    <div style="background:rgba(0,0,0,0.35);border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;min-height:260px;padding:24px;">
+      <div class="modal modal-sm">
+        <div class="modal-title">Delete "DOTween Pro"?</div>
+        <div class="modal-sub">Choose what to delete. The Drive folder can be recovered from Google Drive trash if needed.</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px;">
+          <div style="padding:10px 12px;border:1px solid var(--border-subtle);border-radius:var(--radius-md);font-size:12px;">
+            <div style="font-weight:500;margin-bottom:2px;">Index only</div>
+            <div style="color:var(--text-secondary);font-size:11px;">Removes from the asset list. Drive folder and files remain untouched.</div>
+          </div>
+          <div style="padding:10px 12px;border:1px solid var(--red-border);border-radius:var(--radius-md);font-size:12px;background:var(--red-bg);">
+            <div style="font-weight:500;color:var(--red-text);margin-bottom:2px;">Index + Trash Drive folder</div>
+            <div style="color:var(--red-text);font-size:11px;opacity:0.8;">Removes from list AND moves Drive folder to trash (recoverable).</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn">Cancel</button>
+          <button class="btn">Index only</button>
+          <button class="btn btn-danger"><i class="ti ti-trash" aria-hidden="true"></i> Index + Trash Drive</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div>
+    <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:12px;">Toast notifications — fixed bottom-right in real app</p>
+    <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;">
+      <div class="toast toast-success">
+        <i class="ti ti-circle-check toast-icon" aria-hidden="true"></i>
+        <div class="toast-body"><div class="toast-title">Asset created</div><div class="toast-msg">DOTween Pro folder created in Drive</div></div>
+        <i class="ti ti-x toast-close" aria-hidden="true"></i>
+      </div>
+      <div class="toast toast-error">
+        <i class="ti ti-circle-x toast-icon" aria-hidden="true"></i>
+        <div class="toast-body"><div class="toast-title">Drive error</div><div class="toast-msg">Could not connect to Google Drive (403)</div></div>
+        <i class="ti ti-x toast-close" aria-hidden="true"></i>
+      </div>
+      <div class="toast toast-info">
+        <i class="ti ti-info-circle toast-icon" aria-hidden="true"></i>
+        <div class="toast-body"><div class="toast-title">Scanning Drive…</div><div class="toast-msg">Checking packages and images</div></div>
+        <i class="ti ti-x toast-close" aria-hidden="true"></i>
+      </div>
+      <div class="toast toast-warning">
+        <i class="ti ti-alert-triangle toast-icon" aria-hidden="true"></i>
+        <div class="toast-body"><div class="toast-title">Missing package</div><div class="toast-msg">No .unitypackage found in Feel folder</div></div>
+        <i class="ti ti-x toast-close" aria-hidden="true"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Credentials table -->
+  <div>
+    <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:12px;">Credentials</p>
+    <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg-primary);">
+      <div class="topbar">
+        <div class="topbar-title">Team credentials</div>
+        <button class="btn btn-primary"><i class="ti ti-user-plus" aria-hidden="true"></i> Add user</button>
+      </div>
+      <div style="padding:16px 20px;">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">Total users</div><div class="stat-value">4</div></div>
+          <div class="stat-card"><div class="stat-label">Admins</div><div class="stat-value">1</div></div>
+          <div class="stat-card"><div class="stat-label">Developers</div><div class="stat-value">3</div></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Username</th><th>Role</th><th>Added</th><th style="width:80px;"></th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="font-medium">rimon</td>
+                <td><span class="badge badge-admin">admin</span></td>
+                <td class="text-muted">May 2025</td>
+                <td><div class="actions"><button class="icon-btn"><i class="ti ti-edit" aria-hidden="true"></i></button><button class="icon-btn"><i class="ti ti-trash" aria-hidden="true"></i></button></div></td>
+              </tr>
+              <tr>
+                <td class="font-medium">dev_sakib</td>
+                <td><span class="badge badge-dev">dev</span></td>
+                <td class="text-muted">May 2025</td>
+                <td><div class="actions"><button class="icon-btn"><i class="ti ti-edit" aria-hidden="true"></i></button><button class="icon-btn"><i class="ti ti-trash" aria-hidden="true"></i></button></div></td>
+              </tr>
+              <tr>
+                <td class="font-medium">dev_rafi</td>
+                <td><span class="badge badge-dev">dev</span></td>
+                <td class="text-muted">Jun 2025</td>
+                <td><div class="actions"><button class="icon-btn"><i class="ti ti-edit" aria-hidden="true"></i></button><button class="icon-btn"><i class="ti ti-trash" aria-hidden="true"></i></button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div>
+    <p style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#888;margin-bottom:12px;">Empty state</p>
+    <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-lg);overflow:hidden;background:var(--bg-primary);">
+      <div class="topbar"><div class="topbar-title">Asset library</div><button class="btn btn-primary"><i class="ti ti-plus" aria-hidden="true"></i> Add asset</button></div>
+      <div class="empty-state">
+        <i class="ti ti-box-off" aria-hidden="true"></i>
+        <p>No assets yet — add your first one</p>
+        <button class="btn btn-primary"><i class="ti ti-plus" aria-hidden="true"></i> Add asset</button>
+      </div>
+    </div>
+  </div>
+
+</div>

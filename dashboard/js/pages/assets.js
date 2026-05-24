@@ -2,30 +2,67 @@ const AssetsPage = (() => {
   let _assets = [];
   let _filter = '';
   let _tagFilter = '';
+  let _sort = 'name-asc';
+  let _scanStatus = {};
 
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function initials(name) {
+    return (name || '?').split(/\s+/).map(w => w[0] || '').join('').slice(0, 2).toUpperCase() || '?';
+  }
+
+  function thumbColor(name) {
+    const colors = ['blue', 'purple', 'green', 'amber', 'red', 'teal'];
+    return colors[(name || '?').toUpperCase().charCodeAt(0) % colors.length];
+  }
+
+  function genId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  // ── Page ──────────────────────────────────────────────
   async function render(container) {
     container.innerHTML = `
-      <div class="page">
-        <div class="page-header">
-          <div>
-            <div class="page-title">Assets</div>
-            <div class="page-subtitle">Unity packages hosted on Google Drive</div>
-          </div>
-          <button class="btn btn-primary" id="add-asset-btn">+ Add Asset</button>
+      <div class="topbar">
+        <div>
+          <span class="topbar-title">Asset library</span>
+          <span class="topbar-count" id="asset-count"></span>
         </div>
-        <div class="asset-controls">
-          <input class="form-input search-input" id="asset-search" placeholder="Search assets…" value="${_filter}">
-          <div class="tag-filters" id="tag-filters"></div>
-        </div>
-        <div id="asset-grid-wrap">
-          <div class="loading">Loading assets…</div>
-        </div>
+        <button class="btn btn-primary" id="add-asset-btn">
+          <i class="ti ti-plus"></i> Add asset
+        </button>
+      </div>
+      <div class="filter-row">
+        <input class="input input-search" id="asset-search" placeholder="Search assets…" value="${_filter}">
+        <select class="input" id="asset-sort">
+          <option value="name-asc"      ${_sort==='name-asc'      ?'selected':''}>Name A–Z</option>
+          <option value="name-desc"     ${_sort==='name-desc'     ?'selected':''}>Name Z–A</option>
+          <option value="newest"        ${_sort==='newest'        ?'selected':''}>Newest first</option>
+          <option value="oldest"        ${_sort==='oldest'        ?'selected':''}>Oldest first</option>
+          <option value="ready-first"   ${_sort==='ready-first'   ?'selected':''}>Ready first</option>
+          <option value="missing-first" ${_sort==='missing-first' ?'selected':''}>Missing first</option>
+        </select>
+        <div id="tag-filters" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+      </div>
+      <div class="content" id="asset-list-wrap">
+        <div class="loading">Loading assets…</div>
       </div>`;
 
     document.getElementById('add-asset-btn').addEventListener('click', showAddModal);
+
     document.getElementById('asset-search').addEventListener('input', e => {
       _filter = e.target.value.toLowerCase();
-      renderGrid();
+      renderTagFilters();
+      renderList();
+      sortedAssets().forEach(a => a.drive_folder_id && scanAsset(a));
+    });
+
+    document.getElementById('asset-sort').addEventListener('change', e => {
+      _sort = e.target.value;
+      renderList();
+      sortedAssets().forEach(a => a.drive_folder_id && scanAsset(a));
     });
 
     await loadAssets();
@@ -34,28 +71,23 @@ const AssetsPage = (() => {
   async function loadAssets() {
     try {
       const index = await GitHub.readGist(CONFIG.GIST_INDEX_ID, 'index.json');
-      const entries = index.assets || [];
-
-      _assets = await Promise.all(entries.map(async e => {
-        try {
-          const info = await Drive.readJsonFile(e.info_file_id);
-          return { name: e.name, info_file_id: e.info_file_id, info };
-        } catch {
-          return { name: e.name, info_file_id: e.info_file_id, info: null };
-        }
-      }));
-
+      _assets = index.assets || [];
       renderTagFilters();
-      renderGrid();
+      renderList();
+      _assets.forEach(a => a.drive_folder_id && scanAsset(a));
     } catch (err) {
-      document.getElementById('asset-grid-wrap').innerHTML =
-        `<div class="empty-state"><p class="text-danger">Failed to load: ${err.message}</p></div>`;
+      const wrap = document.getElementById('asset-list-wrap');
+      if (wrap) wrap.innerHTML = `
+        <div class="empty-state">
+          <i class="ti ti-alert-circle"></i>
+          <p>Failed to load: ${esc(err.message)}</p>
+        </div>`;
     }
   }
 
   function allTags() {
     const tags = new Set();
-    _assets.forEach(a => (a.info?.tags || []).forEach(t => tags.add(t)));
+    _assets.forEach(a => (a.tags || []).forEach(t => tags.add(t)));
     return [...tags].sort();
   }
 
@@ -63,346 +95,465 @@ const AssetsPage = (() => {
     const wrap = document.getElementById('tag-filters');
     if (!wrap) return;
     wrap.innerHTML = allTags().map(t =>
-      `<span class="tag-filter${_tagFilter === t ? ' active' : ''}" data-tag="${t}">${t}</span>`
+      `<span class="tag tag-filter${_tagFilter === t ? ' active' : ''}" data-tag="${esc(t)}">${esc(t)}</span>`
     ).join('');
     wrap.querySelectorAll('.tag-filter').forEach(el => {
       el.addEventListener('click', () => {
         _tagFilter = _tagFilter === el.dataset.tag ? '' : el.dataset.tag;
         renderTagFilters();
-        renderGrid();
+        renderList();
+        sortedAssets().forEach(a => a.drive_folder_id && scanAsset(a));
       });
     });
   }
 
   function filteredAssets() {
     return _assets.filter(a => {
-      const info = a.info || {};
       if (_filter) {
-        const hay = `${a.name} ${info.publisher || ''} ${(info.tags || []).join(' ')}`.toLowerCase();
+        const hay = `${a.name} ${a.publisher || ''} ${(a.tags || []).join(' ')}`.toLowerCase();
         if (!hay.includes(_filter)) return false;
       }
-      if (_tagFilter && !(info.tags || []).includes(_tagFilter)) return false;
+      if (_tagFilter && !(a.tags || []).includes(_tagFilter)) return false;
       return true;
     });
   }
 
-  function renderGrid() {
-    const wrap = document.getElementById('asset-grid-wrap');
-    if (!wrap) return;
-    const list = filteredAssets();
-    if (!list.length) {
-      wrap.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⬡</div><p>No assets found</p></div>`;
-      return;
-    }
-    wrap.innerHTML = `<div class="asset-grid" id="asset-grid"></div>`;
-    const grid = document.getElementById('asset-grid');
-    list.forEach(a => {
-      const card = document.createElement('div');
-      card.className = 'asset-card';
-      const info = a.info || {};
-      const tags = (info.tags || []).slice(0, 3).map(t =>
-        `<span class="badge badge-tag">${t}</span>`).join('');
-      const price = info.price_usd === 0 ? 'Free' : info.price_usd ? `$${info.price_usd}` : '';
-      card.innerHTML = `
-        <div class="asset-cover" id="cover-${sanitize(a.name)}">
-          <span>⬡</span>
-        </div>
-        <div class="asset-info">
-          <div class="asset-name">${esc(a.name)}</div>
-          <div class="asset-publisher">${esc(info.publisher || '')}</div>
-          ${price ? `<div class="asset-price">${esc(price)}</div>` : ''}
-          <div class="asset-tags">${tags}</div>
-        </div>`;
-      card.addEventListener('click', () => showDetail(a));
-      grid.appendChild(card);
-
-      if (info.cover) {
-        Drive.getImageBlobUrl(info.cover).then(url => {
-          if (!url) return;
-          const el = document.getElementById(`cover-${sanitize(a.name)}`);
-          if (el) el.innerHTML = `<img src="${url}" alt="${esc(a.name)}">`;
-        });
+  function sortedAssets() {
+    return filteredAssets().sort((a, b) => {
+      switch (_sort) {
+        case 'name-asc':      return a.name.localeCompare(b.name);
+        case 'name-desc':     return b.name.localeCompare(a.name);
+        case 'newest':        return b.id.localeCompare(a.id);
+        case 'oldest':        return a.id.localeCompare(b.id);
+        case 'ready-first': {
+          const ra = _scanStatus[a.id] === 'ready' ? 0 : 1;
+          const rb = _scanStatus[b.id] === 'ready' ? 0 : 1;
+          return ra - rb || a.name.localeCompare(b.name);
+        }
+        case 'missing-first': {
+          const ma = _scanStatus[a.id] === 'missing' ? 0 : 1;
+          const mb = _scanStatus[b.id] === 'missing' ? 0 : 1;
+          return ma - mb || a.name.localeCompare(b.name);
+        }
+        default: return 0;
       }
     });
   }
 
-  async function showDetail(asset) {
-    const info = asset.info || {};
+  // ── List render ───────────────────────────────────────
+  function renderList() {
+    const wrap = document.getElementById('asset-list-wrap');
+    if (!wrap) return;
+    const list = sortedAssets();
 
-    const screenshotsHtml = (info.screenshots || []).map((_, i) =>
-      `<img class="screenshot-thumb" id="ss-${i}" src="" alt="screenshot">`
-    ).join('');
+    const countEl = document.getElementById('asset-count');
+    if (countEl) countEl.textContent = `${list.length} asset${list.length !== 1 ? 's' : ''}`;
 
-    const tagsHtml = (info.tags || []).map(t => `<span class="badge badge-tag">${esc(t)}</span>`).join(' ');
-
-    App.showModal(`${esc(info.name || asset.name)}`, `
-      <img class="asset-detail-cover" id="detail-cover" src="" alt="cover"
-           style="background:var(--surface-3);display:block">
-      ${info.screenshots?.length ? `<div class="screenshots-row">${screenshotsHtml}</div>` : ''}
-      <div class="asset-meta">
-        <div class="meta-item"><label>Publisher</label><span>${esc(info.publisher || '—')}</span></div>
-        <div class="meta-item"><label>Price</label><span>${info.price_usd === 0 ? 'Free' : info.price_usd ? '$' + info.price_usd : '—'}</span></div>
-        ${info.asset_store_url ? `<div class="meta-item"><label>Asset Store</label><span><a href="${esc(info.asset_store_url)}" target="_blank">View ↗</a></span></div>` : ''}
-        <div class="meta-item"><label>Tags</label><span>${tagsHtml || '—'}</span></div>
-      </div>
-      ${info.description ? `<p style="font-size:13px;color:var(--text-muted)">${esc(info.description)}</p>` : ''}
-      ${info.packages?.length ? `
-        <div>
-          <div class="form-label" style="margin-bottom:8px">Packages</div>
-          ${info.packages.map(p => `
-            <div class="version-row">
-              <span class="version-tag">v${esc(p.version)}</span>
-              <span class="version-notes">${esc(p.notes || '')}</span>
-              <button class="btn btn-sm btn-primary" data-fileid="${esc(p.file_id)}">Download</button>
-            </div>`).join('')}
-        </div>` : ''}
-    `, [
-      { label: 'Edit', cls: 'btn-secondary', action: () => { App.closeModal(); showEditModal(asset); } },
-      { label: 'Close', cls: 'btn-secondary', action: () => App.closeModal() }
-    ]);
-
-    if (info.cover) {
-      Drive.getImageBlobUrl(info.cover).then(url => {
-        const el = document.getElementById('detail-cover');
-        if (el && url) el.src = url;
-      });
+    if (!list.length) {
+      wrap.innerHTML = `
+        <div class="empty-state">
+          <i class="ti ti-package-off"></i>
+          <p>No assets found</p>
+        </div>`;
+      return;
     }
 
-    (info.screenshots || []).forEach((id, i) => {
-      Drive.getImageBlobUrl(id).then(url => {
-        const el = document.getElementById(`ss-${i}`);
-        if (el && url) el.src = url;
-      });
-    });
+    wrap.innerHTML = `<div class="asset-list" id="asset-list">${list.map(rowHtml).join('')}</div>`;
+    document.getElementById('asset-list').addEventListener('click', handleRowClick);
+  }
 
-    document.querySelectorAll('[data-fileid]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        btn.textContent = 'Getting link…';
-        try {
-          const url = await Drive.getDownloadUrl(btn.dataset.fileid);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = '';
-          a.click();
-        } catch (err) {
-          App.toast(`Download failed: ${err.message}`, 'error');
+  function rowHtml(a) {
+    const tags = (a.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
+    const hasStore  = !!a.asset_store_url;
+    const hasFolder = !!a.drive_folder_id;
+    const color = thumbColor(a.name);
+
+    return `
+      <div class="asset-row" data-id="${esc(a.id)}">
+        <div class="asset-thumb thumb-${color}" id="thumb-${esc(a.id)}">${esc(initials(a.name))}</div>
+        <div class="asset-info">
+          <div class="asset-name">${esc(a.name)}</div>
+          <div class="asset-pub">${esc(a.publisher || '')}</div>
+          <div class="asset-tags">${tags}</div>
+        </div>
+        <div class="img-strip" id="strip-${esc(a.id)}">
+          <div class="img-preview loading"></div>
+        </div>
+        <div class="vdivider"></div>
+        <span class="badge badge-missing" id="status-${esc(a.id)}">
+          <i class="ti ti-loader"></i> Scanning
+        </span>
+        <div class="vdivider"></div>
+        <div class="actions">
+          <button class="icon-btn${!hasStore ? ' dim' : ''}" data-action="store" title="View on Asset Store">
+            <i class="ti ti-external-link"></i>
+          </button>
+          <button class="icon-btn${!hasFolder ? ' dim' : ''}" data-action="drive" title="Open Drive folder">
+            <i class="ti ti-upload"></i>
+          </button>
+          <button class="icon-btn${!hasFolder ? ' dim' : ''}" data-action="refresh" title="Refresh">
+            <i class="ti ti-refresh"></i>
+          </button>
+          <button class="icon-btn" data-action="edit" title="Edit">
+            <i class="ti ti-edit"></i>
+          </button>
+          <button class="icon-btn icon-btn-danger" data-action="delete" title="Delete">
+            <i class="ti ti-trash"></i>
+          </button>
+        </div>
+      </div>`;
+  }
+
+  function handleRowClick(e) {
+    const btn = e.target.closest('[data-action]');
+    if (!btn || btn.classList.contains('dim')) return;
+
+    const row = btn.closest('.asset-row');
+    const asset = _assets.find(a => a.id === row?.dataset.id);
+    if (!asset) return;
+
+    const action = btn.dataset.action;
+    if (action === 'store') {
+      const url = /^https?:\/\//i.test(asset.asset_store_url)
+        ? asset.asset_store_url
+        : 'https://' + asset.asset_store_url;
+      window.open(url, '_blank');
+    } else if (action === 'drive') {
+      window.open(`https://drive.google.com/drive/folders/${asset.drive_folder_id}`, '_blank');
+    } else if (action === 'refresh') {
+      Drive.invalidateCache(asset.drive_folder_id);
+      scanAsset(asset, { forceRefresh: true });
+    } else if (action === 'edit') {
+      showEditModal(asset);
+    } else if (action === 'delete') {
+      showDeleteModal(asset);
+    }
+  }
+
+  function showDeleteModal(asset) {
+    App.showModal(`Delete "${esc(asset.name)}"?`, `
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:4px">
+        <div style="padding:10px 12px;border:1px solid var(--border-subtle);border-radius:var(--radius-md);font-size:12px">
+          <div style="font-weight:500;margin-bottom:2px">Index only</div>
+          <div style="color:var(--text-secondary);font-size:11px">Removes from the asset list. Drive folder and files remain untouched.</div>
+        </div>
+        <div style="padding:10px 12px;border:1px solid var(--red-border);border-radius:var(--radius-md);font-size:12px;background:var(--red-bg)">
+          <div style="font-weight:500;color:var(--red-text);margin-bottom:2px">Index + Trash Drive folder</div>
+          <div style="color:var(--red-text);font-size:11px;opacity:0.8">Removes from list AND moves Drive folder to trash (recoverable).</div>
+        </div>
+      </div>
+    `, [
+      { label: 'Cancel', cls: 'btn-secondary', action: () => App.closeModal() },
+      { label: 'Index only', cls: 'btn-secondary', action: () => deleteAsset(asset, false) },
+      { label: 'Index + Trash Drive folder', cls: 'btn-danger', action: () => deleteAsset(asset, true) }
+    ]);
+  }
+
+  async function deleteAsset(asset, trashDrive) {
+    try {
+      const index = await GitHub.readGist(CONFIG.GIST_INDEX_ID, 'index.json');
+      index.assets = (index.assets || []).filter(a => a.id !== asset.id);
+      await GitHub.writeGist(CONFIG.GIST_INDEX_ID, 'index.json', index);
+
+      if (trashDrive && asset.drive_folder_id) {
+        await Drive.trashFolder(asset.drive_folder_id);
+      }
+
+      delete _scanStatus[asset.id];
+      Drive.invalidateCache(asset.drive_folder_id);
+      App.closeModal();
+      App.toast(`"${asset.name}" deleted`, 'success');
+      await loadAssets();
+    } catch (err) {
+      App.toast(`Delete failed: ${err.message}`, 'error');
+    }
+  }
+
+  // ── Scanning ──────────────────────────────────────────
+  async function scanAsset(asset, { forceRefresh = false } = {}) {
+    if (!asset.drive_folder_id) return;
+    try {
+      const files = await Drive.listFilesInFolder(asset.drive_folder_id, { forceRefresh });
+      const cover       = Drive.findCover(files);
+      const screenshots = Drive.findScreenshots(files);
+      const packages    = Drive.findPackages(files);
+
+      if (cover) {
+        Drive.getImageBlobUrl(cover.id).then(url => {
+          const el = document.getElementById(`thumb-${asset.id}`);
+          if (!el || !url) return;
+          const img = document.createElement('img');
+          img.onload = () => {
+            const current = document.getElementById(`thumb-${asset.id}`);
+            if (current) { current.innerHTML = ''; current.appendChild(img); }
+          };
+          img.onerror = () => {};
+          img.src = url;
+        });
+      }
+
+      updateStrip(asset.id, screenshots);
+
+      const status = packages.length ? 'ready' : 'missing';
+      _scanStatus[asset.id] = status;
+      const statusEl = document.getElementById(`status-${asset.id}`);
+      if (statusEl) {
+        if (status === 'ready') {
+          statusEl.className = 'badge badge-ready';
+          statusEl.innerHTML = `<i class="ti ti-circle-check"></i> Ready`;
+        } else {
+          statusEl.className = 'badge badge-missing';
+          statusEl.innerHTML = `<i class="ti ti-alert-triangle"></i> Missing package`;
         }
-        btn.disabled = false;
-        btn.textContent = 'Download';
+      }
+    } catch {
+      const statusEl = document.getElementById(`status-${asset.id}`);
+      if (statusEl) {
+        statusEl.className = 'badge badge-error';
+        statusEl.innerHTML = `<i class="ti ti-x"></i> Scan failed`;
+      }
+    }
+  }
+
+  function updateStrip(assetId, screenshots) {
+    const el = document.getElementById(`strip-${assetId}`);
+    if (!el) return;
+
+    if (!screenshots.length) {
+      el.innerHTML = `<div class="img-none"><i class="ti ti-photo-off"></i></div>`;
+      return;
+    }
+
+    const show  = screenshots.slice(0, 2);
+    const extra = screenshots.length - 2;
+
+    el.innerHTML = show.map((_, i) =>
+      `<div class="img-preview loading" id="ss-${assetId}-${i}"></div>`
+    ).join('') + (extra > 0 ? `<div class="img-more">+${extra}</div>` : '');
+
+    show.forEach((f, i) => {
+      const phId = `ss-${assetId}-${i}`;
+      Drive.getImageBlobUrl(f.id).then(url => {
+        const ph = document.getElementById(phId);
+        if (!ph) return;
+        if (!url) { ph.classList.remove('loading'); return; }
+
+        const img = document.createElement('img');
+        img.alt = '';
+        img.onload = () => {
+          const current = document.getElementById(phId);
+          if (current) {
+            current.classList.remove('loading');
+            current.appendChild(img);
+          }
+        };
+        img.onerror = () => {
+          const current = document.getElementById(phId);
+          if (current) current.classList.remove('loading');
+        };
+        img.src = url;
+      }).catch(() => {
+        const ph = document.getElementById(phId);
+        if (ph) ph.classList.remove('loading');
       });
     });
   }
 
-  function buildAssetForm(existing = null) {
-    const info = existing?.info || {};
-    const packages = info.packages || [{ version: '', file_id: '', notes: '' }];
+  // ── Form ──────────────────────────────────────────────
+  function buildForm(existing = null) {
+    const versions = existing?.versions?.length
+      ? existing.versions
+      : [{ version: '', notes: '' }];
 
     return `
-      <div class="form-row form-row-2">
+      <div class="form-row">
         <div class="form-group">
           <label class="form-label">Asset Name *</label>
-          <input class="form-input" id="af-name" value="${esc(info.name || existing?.name || '')}" ${existing ? 'readonly' : ''}>
+          <input class="input" id="af-name" value="${esc(existing?.name || '')}" ${existing ? 'readonly' : ''} style="width:100%">
         </div>
         <div class="form-group">
           <label class="form-label">Publisher</label>
-          <input class="form-input" id="af-publisher" value="${esc(info.publisher || '')}">
+          <input class="input" id="af-publisher" value="${esc(existing?.publisher || '')}" style="width:100%">
         </div>
       </div>
       <div class="form-group">
         <label class="form-label">Description</label>
-        <textarea class="form-textarea" id="af-desc">${esc(info.description || '')}</textarea>
+        <textarea class="input" id="af-desc" style="width:100%">${esc(existing?.description || '')}</textarea>
       </div>
-      <div class="form-row form-row-2">
+      <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Tags (comma separated)</label>
-          <input class="form-input" id="af-tags" value="${esc((info.tags || []).join(', '))}">
+          <label class="form-label">Tags <span class="text-tertiary text-xs" style="font-weight:400">comma separated</span></label>
+          <input class="input" id="af-tags" value="${esc((existing?.tags || []).join(', '))}" style="width:100%">
         </div>
         <div class="form-group">
           <label class="form-label">Price USD (0 = free)</label>
-          <input class="form-input" type="number" min="0" id="af-price" value="${info.price_usd ?? ''}">
+          <input class="input" type="number" min="0" id="af-price" value="${existing?.price_usd ?? ''}" style="width:100%">
         </div>
       </div>
       <div class="form-group">
         <label class="form-label">Asset Store URL</label>
-        <input class="form-input" type="url" id="af-url" value="${esc(info.asset_store_url || '')}">
+        <input class="input" type="url" id="af-url" value="${esc(existing?.asset_store_url || '')}" style="width:100%">
       </div>
       <div class="form-group">
-        <label class="form-label">Cover Image ${existing ? '(upload to replace)' : ''}</label>
-        <input class="form-input" type="file" id="af-cover" accept="image/*">
-        ${existing && info.cover ? '<p class="form-hint">Current cover kept if no new file selected.</p>' : ''}
-      </div>
-      <div class="form-group">
-        <label class="form-label">Screenshots ${existing ? '(upload to replace all)' : ''}</label>
-        <input class="form-input" type="file" id="af-screenshots" accept="image/*" multiple>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Packages</label>
-        <div id="packages-list">
-          ${packages.map((p, i) => packageEntryHtml(i, p)).join('')}
+        <label class="form-label">Versions</label>
+        <div id="versions-list">
+          ${versions.map((v, i) => versionEntryHtml(i, v)).join('')}
         </div>
-        <button class="btn btn-secondary btn-sm mt-1" type="button" id="add-pkg-btn">+ Add Version</button>
+        <button class="btn btn-sm mt-2" type="button" id="add-ver-btn">+ Add Version</button>
       </div>`;
   }
 
-  function packageEntryHtml(i, p = {}) {
+  function versionEntryHtml(i, v = {}) {
     return `
-      <div class="package-entry" data-pkg="${i}">
-        <button class="btn btn-sm btn-danger btn-icon remove-btn" data-remove="${i}" title="Remove">✕</button>
-        <div class="form-row form-row-2">
-          <div class="form-group">
-            <label class="form-label">Version</label>
-            <input class="form-input pkg-version" value="${esc(p.version || '')}">
+      <div class="version-entry" data-vi="${i}">
+        <div class="form-row" style="margin-bottom:8px">
+          <div class="form-group" style="margin-bottom:0">
+            <input class="input ver-version" placeholder="e.g. 1.2.0" value="${esc(v.version || '')}" style="width:100%">
           </div>
-          <div class="form-group">
-            <label class="form-label">.unitypackage file</label>
-            <input class="form-input pkg-file" type="file" accept=".unitypackage">
+          <div class="form-group" style="margin-bottom:0;display:flex;gap:6px;align-items:center">
+            <input class="input ver-notes" placeholder="Release notes (optional)" value="${esc(v.notes || '')}" style="flex:1">
+            <button class="icon-btn icon-btn-danger" data-remove-ver="${i}" style="flex-shrink:0">
+              <i class="ti ti-x"></i>
+            </button>
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Release Notes</label>
-          <input class="form-input pkg-notes" value="${esc(p.notes || '')}">
-        </div>
-        ${p.file_id ? `<p class="form-hint">Existing file_id: ${esc(p.file_id)} — upload new file to replace.</p>` : ''}
       </div>`;
   }
 
-  function attachPkgButtons() {
-    let pkgCount = document.querySelectorAll('.package-entry').length;
-    document.getElementById('add-pkg-btn').addEventListener('click', () => {
-      const list = document.getElementById('packages-list');
+  function attachVersionButtons() {
+    let count = document.querySelectorAll('.version-entry').length;
+    document.getElementById('add-ver-btn').addEventListener('click', () => {
+      const list = document.getElementById('versions-list');
       const div = document.createElement('div');
-      div.innerHTML = packageEntryHtml(pkgCount++);
+      div.innerHTML = versionEntryHtml(count++);
       list.appendChild(div.firstElementChild);
-      attachRemoveButtons();
+      attachRemoveVerButtons();
     });
-    attachRemoveButtons();
+    attachRemoveVerButtons();
   }
 
-  function attachRemoveButtons() {
-    document.querySelectorAll('[data-remove]').forEach(btn => {
-      btn.onclick = () => btn.closest('.package-entry').remove();
+  function attachRemoveVerButtons() {
+    document.querySelectorAll('[data-remove-ver]').forEach(btn => {
+      btn.onclick = () => btn.closest('.version-entry').remove();
     });
   }
 
+  function collectFormData() {
+    const priceVal = document.getElementById('af-price').value;
+    return {
+      name:            document.getElementById('af-name').value.trim(),
+      publisher:       document.getElementById('af-publisher').value.trim(),
+      description:     document.getElementById('af-desc').value.trim(),
+      tags:            document.getElementById('af-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+      price_usd:       priceVal !== '' ? Number(priceVal) : null,
+      asset_store_url: document.getElementById('af-url').value.trim(),
+      versions:        [...document.querySelectorAll('.version-entry')]
+                         .map(el => ({
+                           version: el.querySelector('.ver-version').value.trim(),
+                           notes:   el.querySelector('.ver-notes').value.trim()
+                         }))
+                         .filter(v => v.version)
+    };
+  }
+
+  // ── Add ───────────────────────────────────────────────
   function showAddModal() {
-    App.showModal('Add Asset', buildAssetForm(), [
+    App.showModal('Add asset', buildForm(), [
       { label: 'Cancel', cls: 'btn-secondary', action: () => App.closeModal() },
-      { label: 'Upload & Save', cls: 'btn-primary', action: () => submitAsset(null) }
+      { label: 'Create folder & save', cls: 'btn-primary', action: submitAdd }
     ], true);
-    attachPkgButtons();
+    attachVersionButtons();
   }
 
-  function showEditModal(asset) {
-    App.showModal('Edit Asset', buildAssetForm(asset), [
-      { label: 'Cancel', cls: 'btn-secondary', action: () => App.closeModal() },
-      { label: 'Save Changes', cls: 'btn-primary', action: () => submitAsset(asset) }
-    ], true);
-    attachPkgButtons();
-  }
-
-  async function submitAsset(existing) {
-    const name = document.getElementById('af-name').value.trim();
-    if (!name) { App.toast('Asset name required', 'error'); return; }
+  async function submitAdd() {
+    const data = collectFormData();
+    if (!data.name) { App.toast('Asset name required', 'error'); return; }
 
     const btn = document.querySelector('.modal-footer .btn-primary');
-    btn.disabled = true;
-    btn.textContent = 'Uploading…';
+    btn.disabled = true; btn.textContent = 'Creating…';
 
     try {
-      const rootId = CONFIG.DRIVE_ROOT_FOLDER_ID;
-      let assetFolderId, imagesFolderId;
-      let existingInfoFileId = existing?.info_file_id;
+      const folder = await Drive.createFolder(data.name, CONFIG.DRIVE_ROOT_FOLDER_ID);
 
-      if (!existing) {
-        const folder = await Drive.createFolder(name, rootId);
-        assetFolderId = folder.id;
-        const imgFolder = await Drive.createFolder('images', assetFolderId);
-        imagesFolderId = imgFolder.id;
-      } else {
-        const folders = await Drive.listFolder(rootId);
-        const af = folders.find(f => f.name === name && f.mimeType === 'application/vnd.google-apps.folder');
-        if (!af) throw new Error('Asset folder not found on Drive');
-        assetFolderId = af.id;
-        const subFolders = await Drive.listFolder(assetFolderId);
-        const imgF = subFolders.find(f => f.name === 'images');
-        imagesFolderId = imgF?.id;
-        if (!imagesFolderId) {
-          const imgFolder = await Drive.createFolder('images', assetFolderId);
-          imagesFolderId = imgFolder.id;
-        }
-      }
+      const asset = {
+        id:              genId(),
+        name:            data.name,
+        publisher:       data.publisher,
+        description:     data.description,
+        tags:            data.tags,
+        price_usd:       data.price_usd,
+        asset_store_url: data.asset_store_url,
+        drive_folder_id: folder.id,
+        versions:        data.versions
+      };
 
-      const info = existing?.info ? { ...existing.info } : {};
-
-      const coverFile = document.getElementById('af-cover').files[0];
-      if (coverFile) {
-        btn.textContent = 'Uploading cover…';
-        const uploaded = await Drive.uploadFile(coverFile.name, coverFile, imagesFolderId);
-        info.cover = uploaded.id;
-      }
-
-      const ssFiles = [...document.getElementById('af-screenshots').files];
-      if (ssFiles.length) {
-        btn.textContent = 'Uploading screenshots…';
-        const ssIds = await Promise.all(ssFiles.map(f => Drive.uploadFile(f.name, f, imagesFolderId).then(r => r.id)));
-        info.screenshots = ssIds;
-      }
-
-      const pkgEntries = [...document.querySelectorAll('.package-entry')];
-      btn.textContent = 'Uploading packages…';
-      const packages = [];
-      for (const entry of pkgEntries) {
-        const version = entry.querySelector('.pkg-version').value.trim();
-        const notes   = entry.querySelector('.pkg-notes').value.trim();
-        const file    = entry.querySelector('.pkg-file').files[0];
-        const hint    = entry.querySelector('.form-hint');
-        const existingFileId = hint?.textContent.match(/file_id: (\S+)/)?.[1];
-
-        if (!version) continue;
-        let fileId = existingFileId || '';
-        if (file) {
-          const uploaded = await Drive.uploadFile(file.name, file, assetFolderId);
-          fileId = uploaded.id;
-        }
-        packages.push({ version, file_id: fileId, notes });
-      }
-
-      info.name        = name;
-      info.publisher   = document.getElementById('af-publisher').value.trim();
-      info.description = document.getElementById('af-desc').value.trim();
-      info.tags        = document.getElementById('af-tags').value.split(',').map(t => t.trim()).filter(Boolean);
-      info.asset_store_url = document.getElementById('af-url').value.trim();
-      const priceVal = document.getElementById('af-price').value;
-      info.price_usd = priceVal !== '' ? Number(priceVal) : null;
-      info.packages  = packages;
-
-      btn.textContent = 'Saving metadata…';
-      const infoBlob = new Blob([JSON.stringify(info, null, 2)], { type: 'application/json' });
-
-      if (existingInfoFileId) {
-        await Drive.updateFile(existingInfoFileId, infoBlob);
-      } else {
-        const uploaded = await Drive.uploadFile('info.json', infoBlob, assetFolderId);
-        existingInfoFileId = uploaded.id;
-
-        const index = await GitHub.readGist(CONFIG.GIST_INDEX_ID, 'index.json');
-        index.assets.push({ name, info_file_id: existingInfoFileId });
-        await GitHub.writeGist(CONFIG.GIST_INDEX_ID, 'index.json', index);
-      }
+      const index = await GitHub.readGist(CONFIG.GIST_INDEX_ID, 'index.json');
+      if (!index.assets) index.assets = [];
+      index.assets.push(asset);
+      await GitHub.writeGist(CONFIG.GIST_INDEX_ID, 'index.json', index);
 
       App.closeModal();
-      App.toast(`Asset "${name}" saved`, 'success');
+
+      const driveUrl = `https://drive.google.com/drive/folders/${folder.id}`;
+      App.showModal(`"${esc(data.name)}" created`, `
+        <div class="empty-state" style="padding:8px 0 16px">
+          <i class="ti ti-circle-check" style="font-size:28px;color:var(--green-text)"></i>
+          <p>Drive folder created. Upload <strong>cover.png</strong>, screenshots, and
+             <strong>.unitypackage</strong> files directly in Drive.</p>
+          <a href="${esc(driveUrl)}" target="_blank" class="btn btn-primary" style="margin-top:12px">
+            <i class="ti ti-folder-open"></i> Open Drive Folder
+          </a>
+        </div>
+      `, [{ label: 'Done', cls: 'btn-secondary', action: () => App.closeModal() }]);
+
       await loadAssets();
     } catch (err) {
       App.toast(`Error: ${err.message}`, 'error');
-      btn.disabled = false;
-      btn.textContent = existing ? 'Save Changes' : 'Upload & Save';
+      btn.disabled = false; btn.textContent = 'Create folder & save';
     }
   }
 
-  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  function sanitize(s) { return s.replace(/[^a-z0-9]/gi, '_'); }
+  // ── Edit ──────────────────────────────────────────────
+  function showEditModal(asset) {
+    App.showModal('Edit asset', buildForm(asset), [
+      { label: 'Cancel', cls: 'btn-secondary', action: () => App.closeModal() },
+      { label: 'Save', cls: 'btn-primary', action: () => submitEdit(asset) }
+    ], true);
+    attachVersionButtons();
+  }
+
+  async function submitEdit(asset) {
+    const data = collectFormData();
+    const btn = document.querySelector('.modal-footer .btn-primary');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    try {
+      const updated = {
+        id:              asset.id,
+        name:            asset.name,
+        drive_folder_id: asset.drive_folder_id,
+        publisher:       data.publisher,
+        description:     data.description,
+        tags:            data.tags,
+        price_usd:       data.price_usd,
+        asset_store_url: data.asset_store_url,
+        versions:        data.versions
+      };
+
+      const index = await GitHub.readGist(CONFIG.GIST_INDEX_ID, 'index.json');
+      const idx = index.assets.findIndex(a => a.id === asset.id);
+      if (idx === -1) throw new Error('Asset not found in index');
+      index.assets[idx] = updated;
+      await GitHub.writeGist(CONFIG.GIST_INDEX_ID, 'index.json', index);
+
+      App.closeModal();
+      App.toast(`"${updated.name}" saved`, 'success');
+      await loadAssets();
+    } catch (err) {
+      App.toast(`Error: ${err.message}`, 'error');
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+  }
 
   return { render };
 })();
