@@ -4,6 +4,7 @@ const AssetsPage = (() => {
   let _tagFilter = '';
   let _sort = 'name-asc';
   let _scanStatus = {};
+  let _pendingCdn = { cover: null, screenshots: [] };
 
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -51,18 +52,16 @@ const AssetsPage = (() => {
       </div>`;
 
     document.getElementById('add-asset-btn').addEventListener('click', showAddModal);
-
     document.getElementById('asset-search').addEventListener('input', e => {
       _filter = e.target.value.toLowerCase();
       renderTagFilters();
       renderList();
-      sortedAssets().forEach(a => a.drive_folder_id && scanAsset(a));
+      sortedAssets().forEach(a => scanAsset(a));
     });
-
     document.getElementById('asset-sort').addEventListener('change', e => {
       _sort = e.target.value;
       renderList();
-      sortedAssets().forEach(a => a.drive_folder_id && scanAsset(a));
+      sortedAssets().forEach(a => scanAsset(a));
     });
 
     await loadAssets();
@@ -74,7 +73,7 @@ const AssetsPage = (() => {
       _assets = index.assets || [];
       renderTagFilters();
       renderList();
-      _assets.forEach(a => a.drive_folder_id && scanAsset(a));
+      _assets.forEach(a => scanAsset(a));
     } catch (err) {
       const wrap = document.getElementById('asset-list-wrap');
       if (wrap) wrap.innerHTML = `
@@ -102,7 +101,7 @@ const AssetsPage = (() => {
         _tagFilter = _tagFilter === el.dataset.tag ? '' : el.dataset.tag;
         renderTagFilters();
         renderList();
-        sortedAssets().forEach(a => a.drive_folder_id && scanAsset(a));
+        sortedAssets().forEach(a => scanAsset(a));
       });
     });
   }
@@ -269,44 +268,61 @@ const AssetsPage = (() => {
     }
   }
 
-  // ── Scanning ──────────────────────────────────────────
+  // ── Scanning & image fallback chain ───────────────────
   async function scanAsset(asset, { forceRefresh = false } = {}) {
-    if (!asset.drive_folder_id) return;
+    if (!asset.drive_folder_id) {
+      // No Drive folder — use CDN data if available
+      if (asset.cdn_cover) loadUrlCover(asset.id, asset.cdn_cover);
+      else clearThumb(asset.id);
+
+      if (asset.cdn_screenshots?.length) updateStripUrls(asset.id, asset.cdn_screenshots);
+      else clearStrip(asset.id);
+
+      const statusEl = document.getElementById(`status-${asset.id}`);
+      if (statusEl) {
+        statusEl.className = 'badge badge-missing';
+        statusEl.innerHTML = `<i class="ti ti-alert-triangle"></i> No Drive folder`;
+      }
+      return;
+    }
+
     try {
       const files = await Drive.listFilesInFolder(asset.drive_folder_id, { forceRefresh });
       const cover       = Drive.findCover(files);
       const screenshots = Drive.findScreenshots(files);
       const packages    = Drive.findPackages(files);
 
+      // Cover: Drive → CDN fallback
       if (cover) {
-        Drive.getImageBlobUrl(cover.id).then(url => {
-          const el = document.getElementById(`thumb-${asset.id}`);
-          if (!el || !url) return;
-          const img = document.createElement('img');
-          img.onload = () => {
-            const current = document.getElementById(`thumb-${asset.id}`);
-            if (current) { current.innerHTML = ''; current.appendChild(img); }
-          };
-          img.onerror = () => {};
-          img.src = url;
-        });
+        loadDriveCover(asset.id, cover.id);
+      } else if (asset.cdn_cover) {
+        loadUrlCover(asset.id, asset.cdn_cover);
       }
 
-      updateStrip(asset.id, screenshots);
+      // Screenshots: Drive → CDN fallback
+      if (screenshots.length) {
+        updateStrip(asset.id, screenshots);
+      } else if (asset.cdn_screenshots?.length) {
+        updateStripUrls(asset.id, asset.cdn_screenshots);
+      } else {
+        clearStrip(asset.id);
+      }
 
       const status = packages.length ? 'ready' : 'missing';
       _scanStatus[asset.id] = status;
       const statusEl = document.getElementById(`status-${asset.id}`);
       if (statusEl) {
-        if (status === 'ready') {
-          statusEl.className = 'badge badge-ready';
-          statusEl.innerHTML = `<i class="ti ti-circle-check"></i> Ready`;
-        } else {
-          statusEl.className = 'badge badge-missing';
-          statusEl.innerHTML = `<i class="ti ti-alert-triangle"></i> Missing package`;
-        }
+        statusEl.className = `badge badge-${status}`;
+        statusEl.innerHTML = status === 'ready'
+          ? `<i class="ti ti-circle-check"></i> Ready`
+          : `<i class="ti ti-alert-triangle"></i> Missing package`;
       }
     } catch {
+      // Drive error — fall back to CDN
+      if (asset.cdn_cover) loadUrlCover(asset.id, asset.cdn_cover);
+      if (asset.cdn_screenshots?.length) updateStripUrls(asset.id, asset.cdn_screenshots);
+      else clearStrip(asset.id);
+
       const statusEl = document.getElementById(`status-${asset.id}`);
       if (statusEl) {
         statusEl.className = 'badge badge-error';
@@ -315,48 +331,274 @@ const AssetsPage = (() => {
     }
   }
 
+  function loadDriveCover(assetId, fileId) {
+    Drive.getImageBlobUrl(fileId).then(url => {
+      if (!url) return;
+      const el = document.getElementById(`thumb-${assetId}`);
+      if (!el) return;
+      const img = document.createElement('img');
+      img.onload = () => {
+        const current = document.getElementById(`thumb-${assetId}`);
+        if (current) { current.innerHTML = ''; current.appendChild(img); }
+      };
+      img.src = url;
+    });
+  }
+
+  function loadUrlCover(assetId, url) {
+    const el = document.getElementById(`thumb-${assetId}`);
+    if (!el || !url) return;
+    const img = document.createElement('img');
+    img.onload = () => {
+      const current = document.getElementById(`thumb-${assetId}`);
+      if (current) { current.innerHTML = ''; current.appendChild(img); }
+    };
+    img.src = url;
+  }
+
+  function clearThumb(assetId) {
+    // Leave initials — nothing to do, row already renders initials by default
+  }
+
   function updateStrip(assetId, screenshots) {
     const el = document.getElementById(`strip-${assetId}`);
     if (!el) return;
-
-    if (!screenshots.length) {
-      el.innerHTML = `<div class="img-none"><i class="ti ti-photo-off"></i></div>`;
-      return;
-    }
-
     const show  = screenshots.slice(0, 2);
     const extra = screenshots.length - 2;
-
     el.innerHTML = show.map((_, i) =>
       `<div class="img-preview loading" id="ss-${assetId}-${i}"></div>`
     ).join('') + (extra > 0 ? `<div class="img-more">+${extra}</div>` : '');
-
     show.forEach((f, i) => {
-      const phId = `ss-${assetId}-${i}`;
       Drive.getImageBlobUrl(f.id).then(url => {
-        const ph = document.getElementById(phId);
-        if (!ph) return;
-        if (!url) { ph.classList.remove('loading'); return; }
-
-        const img = document.createElement('img');
-        img.alt = '';
-        img.onload = () => {
-          const current = document.getElementById(phId);
-          if (current) {
-            current.classList.remove('loading');
-            current.appendChild(img);
-          }
-        };
-        img.onerror = () => {
-          const current = document.getElementById(phId);
-          if (current) current.classList.remove('loading');
-        };
-        img.src = url;
+        loadIntoPreview(`ss-${assetId}-${i}`, url);
       }).catch(() => {
-        const ph = document.getElementById(phId);
+        const ph = document.getElementById(`ss-${assetId}-${i}`);
         if (ph) ph.classList.remove('loading');
       });
     });
+  }
+
+  function updateStripUrls(assetId, urls) {
+    const el = document.getElementById(`strip-${assetId}`);
+    if (!el) return;
+    const show  = urls.slice(0, 2);
+    const extra = urls.length - 2;
+    el.innerHTML = show.map((_, i) =>
+      `<div class="img-preview loading" id="ss-${assetId}-${i}"></div>`
+    ).join('') + (extra > 0 ? `<div class="img-more">+${extra}</div>` : '');
+    show.forEach((url, i) => loadIntoPreview(`ss-${assetId}-${i}`, url));
+  }
+
+  function clearStrip(assetId) {
+    const el = document.getElementById(`strip-${assetId}`);
+    if (el) el.innerHTML = `<div class="img-none"><i class="ti ti-photo-off"></i></div>`;
+  }
+
+  function loadIntoPreview(phId, url) {
+    const ph = document.getElementById(phId);
+    if (!ph) return;
+    if (!url) { ph.classList.remove('loading'); return; }
+    const img = document.createElement('img');
+    img.alt = '';
+    img.onload = () => {
+      const current = document.getElementById(phId);
+      if (current) { current.classList.remove('loading'); current.appendChild(img); }
+    };
+    img.onerror = () => {
+      const current = document.getElementById(phId);
+      if (current) current.classList.remove('loading');
+    };
+    img.src = url;
+  }
+
+  // ── Auto-fill ─────────────────────────────────────────
+
+  // Matches Unity Asset Store CDN image URLs in raw HTML text
+  const UNITY_CDN_RE = /https?:\/\/[^\s"'<>\\]*(?:cdn\.assetstore\.unity3d\.com|assetstorev\d[^\s"'<>\\]*\.unity3d\.com|d2ujflorbtfzji\.cloudfront\.net)[^\s"'<>\\]*/g;
+
+  function extractCdnUrls(rawHtml) {
+    const seen = new Set();
+    const urls = [];
+    for (const m of rawHtml.matchAll(UNITY_CDN_RE)) {
+      // Unescape JSON forward-slashes, strip trailing junk chars
+      const u = m[0].replace(/\\\/|\\u[0-9a-f]{4}/gi, c =>
+        c.startsWith('\\u') ? String.fromCharCode(parseInt(c.slice(2), 16)) : '/'
+      ).replace(/[^\w\-./:%?=&]+$/, '');
+      if (!seen.has(u) && /\.(png|jpe?g|webp)(\?|$)/i.test(u)) {
+        seen.add(u);
+        urls.push(u);
+      }
+    }
+    return urls;
+  }
+
+  async function fetchViaProxy(targetUrl) {
+    const encoded = encodeURIComponent(targetUrl);
+    const TIMEOUT = 10000;
+
+    const proxies = [
+      {
+        url: `https://corsproxy.io/?${encoded}`,
+        extract: async r => r.text()
+      },
+      {
+        url: `https://api.allorigins.win/get?url=${encoded}`,
+        extract: async r => { const d = await r.json(); return d.contents || ''; }
+      },
+      {
+        url: `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
+        extract: async r => r.text()
+      }
+    ];
+
+    for (const proxy of proxies) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), TIMEOUT);
+        const res = await fetch(proxy.url, { signal: controller.signal });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const html = await proxy.extract(res);
+        if (html && html.length > 500) {
+          console.log(`[auto-fill] ${proxy.url.split('?')[0]} succeeded (${html.length} bytes)`);
+          return html;
+        }
+        throw new Error('Empty response');
+      } catch (e) {
+        console.warn(`[auto-fill] Proxy failed (${proxy.url.split('?')[0]}):`, e.message);
+      }
+    }
+    return null;
+  }
+
+  async function autoFillFromAssetStore() {
+    const urlInput = document.getElementById('af-url');
+    const url = urlInput?.value.trim();
+    if (!url) { App.toast('Enter Asset Store URL first', 'warning'); return; }
+
+    const btn = document.getElementById('af-autofill');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader"></i> Fetching…';
+
+    try {
+      const contents = await fetchViaProxy(url);
+      if (!contents) {
+        App.toast('Could not fetch. Fill in manually.', 'warning');
+        return;
+      }
+      const doc = new DOMParser().parseFromString(contents, 'text/html');
+      let name, publisher, description, price, coverUrl, screenshotUrls = [];
+
+      // 1. Try __NEXT_DATA__ (Unity Asset Store is Next.js — best source)
+      try {
+        const nd = JSON.parse(doc.querySelector('#__NEXT_DATA__')?.textContent || 'null');
+        console.log('[auto-fill] __NEXT_DATA__ keys:', nd ? Object.keys(nd?.props?.pageProps ?? {}) : 'not found');
+        const pp  = nd?.props?.pageProps;
+        // Try every known property path Unity has used
+        const pkg = pp?.package ?? pp?.packageDetails ?? pp?.assetDetails
+                  ?? pp?.initialProps?.package ?? pp?.dehydratedState?.queries?.[0]?.state?.data;
+        if (pkg) {
+          name        = pkg.title ?? pkg.name;
+          publisher   = pkg.publisher?.name ?? pkg.publisherLabel ?? pkg.publisher;
+          description = pkg.description ?? pkg.keyFeatures;
+          price       = pkg.salePrice ?? pkg.price ?? pkg.displayPrice;
+          const imgs  = pkg.images ?? pkg.screenshots ?? pkg.mainImages ?? [];
+          coverUrl    = pkg.mainImage?.url ?? pkg.keyImage?.url ?? imgs[0]?.url ?? imgs[0]?.imageUrl;
+          screenshotUrls = imgs
+            .slice(coverUrl ? 0 : 1)
+            .map(i => i.url ?? i.imageUrl ?? i.src)
+            .filter(u => u && u !== coverUrl);
+        }
+      } catch (e) { console.warn('[auto-fill] __NEXT_DATA__ parse error:', e.message); }
+
+      // 2. Try JSON-LD
+      if (!name) {
+        try {
+          const ld    = JSON.parse(doc.querySelector('script[type="application/ld+json"]')?.textContent || 'null');
+          const items = Array.isArray(ld) ? ld : (ld?.['@graph'] ?? [ld]);
+          const prod  = items.find(i => i?.['@type'] === 'Product') ?? items[0];
+          if (prod) {
+            name        = prod.name;
+            publisher   = prod.brand?.name;
+            description = prod.description;
+            price       = prod.offers?.price ?? prod.offers?.[0]?.price;
+            if (prod.image) {
+              const imgs = Array.isArray(prod.image) ? prod.image : [prod.image];
+              coverUrl       = coverUrl ?? imgs[0];
+              screenshotUrls = screenshotUrls.length ? screenshotUrls : imgs.slice(1);
+            }
+          }
+        } catch {}
+      }
+
+      // 3. og: meta tag fallbacks
+      name        = name        || doc.querySelector('meta[property="og:title"]')?.getAttribute('content');
+      description = description || doc.querySelector('meta[property="og:description"]')?.getAttribute('content')
+                                || doc.querySelector('meta[name="description"]')?.getAttribute('content');
+      coverUrl    = coverUrl    || doc.querySelector('meta[property="og:image"]')?.getAttribute('content');
+
+      // 4. CDN URL regex scan of raw HTML — catches gallery images missed by JS-rendering
+      const cdnUrls = extractCdnUrls(contents);
+      console.log(`[auto-fill] CDN URLs found via regex: ${cdnUrls.length}`, cdnUrls);
+
+      if (cdnUrls.length) {
+        if (!coverUrl) {
+          // Prefer key-image URL as cover
+          coverUrl = cdnUrls.find(u => /key[-_]image/i.test(u)) ?? cdnUrls[0];
+        }
+        if (!screenshotUrls.length) {
+          screenshotUrls = cdnUrls.filter(u => u !== coverUrl);
+        }
+      }
+
+      // Fill form fields
+      const nameEl = document.getElementById('af-name');
+      if (name && nameEl && !nameEl.readOnly) nameEl.value = name;
+
+      const pubEl = document.getElementById('af-publisher');
+      if (publisher && pubEl) pubEl.value = publisher;
+
+      const descEl = document.getElementById('af-desc');
+      if (description && descEl) descEl.value = description;
+
+      const priceEl = document.getElementById('af-price');
+      if (price != null && priceEl) {
+        priceEl.value = parseFloat(String(price).replace(/[^0-9.]/g, '')) || 0;
+      }
+
+      // Store CDN data
+      _pendingCdn = { cover: coverUrl || null, screenshots: screenshotUrls };
+      updateCdnIndicator();
+
+      const filled = [name, publisher, description, price].filter(Boolean).length;
+      App.toast(
+        filled ? `Auto-filled ${filled} field${filled !== 1 ? 's' : ''}` : 'Could not extract data — check URL',
+        filled ? 'success' : 'warning'
+      );
+    } catch (err) {
+      App.toast(`Auto-fill failed: ${err.message}`, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Auto-fill';
+    }
+  }
+
+  function updateCdnIndicator() {
+    const el = document.getElementById('af-cdn-status');
+    if (!el) return;
+    const parts = [];
+    if (_pendingCdn.cover) parts.push('cover');
+    if (_pendingCdn.screenshots?.length) parts.push(`${_pendingCdn.screenshots.length} screenshot${_pendingCdn.screenshots.length !== 1 ? 's' : ''}`);
+    if (parts.length) {
+      el.textContent = `CDN images stored: ${parts.join(', ')}`;
+      el.style.color = 'var(--green-text)';
+    } else {
+      el.textContent = '';
+    }
+  }
+
+  function attachAutofill() {
+    document.getElementById('af-autofill')?.addEventListener('click', autoFillFromAssetStore);
   }
 
   // ── Form ──────────────────────────────────────────────
@@ -364,6 +606,11 @@ const AssetsPage = (() => {
     const versions = existing?.versions?.length
       ? existing.versions
       : [{ version: '', notes: '' }];
+
+    const cdnParts = [];
+    if (_pendingCdn.cover) cdnParts.push('cover');
+    if (_pendingCdn.screenshots?.length) cdnParts.push(`${_pendingCdn.screenshots.length} screenshot${_pendingCdn.screenshots.length !== 1 ? 's' : ''}`);
+    const cdnInitText = cdnParts.length ? `CDN images stored: ${cdnParts.join(', ')}` : '';
 
     return `
       <div class="form-row">
@@ -392,7 +639,11 @@ const AssetsPage = (() => {
       </div>
       <div class="form-group">
         <label class="form-label">Asset Store URL</label>
-        <input class="input" type="url" id="af-url" value="${esc(existing?.asset_store_url || '')}" style="width:100%">
+        <div style="display:flex;gap:6px">
+          <input class="input" type="url" id="af-url" value="${esc(existing?.asset_store_url || '')}" style="flex:1">
+          <button class="btn btn-sm" type="button" id="af-autofill">Auto-fill</button>
+        </div>
+        <div id="af-cdn-status" class="form-hint" style="color:var(--green-text)">${cdnInitText}</div>
       </div>
       <div class="form-group">
         <label class="form-label">Versions</label>
@@ -458,11 +709,13 @@ const AssetsPage = (() => {
 
   // ── Add ───────────────────────────────────────────────
   function showAddModal() {
+    _pendingCdn = { cover: null, screenshots: [] };
     App.showModal('Add asset', buildForm(), [
       { label: 'Cancel', cls: 'btn-secondary', action: () => App.closeModal() },
       { label: 'Create folder & save', cls: 'btn-primary', action: submitAdd }
     ], true);
     attachVersionButtons();
+    attachAutofill();
   }
 
   async function submitAdd() {
@@ -484,7 +737,9 @@ const AssetsPage = (() => {
         price_usd:       data.price_usd,
         asset_store_url: data.asset_store_url,
         drive_folder_id: folder.id,
-        versions:        data.versions
+        versions:        data.versions,
+        ..._pendingCdn.cover        && { cdn_cover:       _pendingCdn.cover },
+        ..._pendingCdn.screenshots?.length && { cdn_screenshots: _pendingCdn.screenshots }
       };
 
       const index = await GitHub.readGist(CONFIG.GIST_INDEX_ID, 'index.json');
@@ -515,11 +770,16 @@ const AssetsPage = (() => {
 
   // ── Edit ──────────────────────────────────────────────
   function showEditModal(asset) {
+    _pendingCdn = {
+      cover:       asset.cdn_cover       || null,
+      screenshots: asset.cdn_screenshots || []
+    };
     App.showModal('Edit asset', buildForm(asset), [
       { label: 'Cancel', cls: 'btn-secondary', action: () => App.closeModal() },
       { label: 'Save', cls: 'btn-primary', action: () => submitEdit(asset) }
     ], true);
     attachVersionButtons();
+    attachAutofill();
   }
 
   async function submitEdit(asset) {
@@ -537,7 +797,9 @@ const AssetsPage = (() => {
         tags:            data.tags,
         price_usd:       data.price_usd,
         asset_store_url: data.asset_store_url,
-        versions:        data.versions
+        versions:        data.versions,
+        ..._pendingCdn.cover        && { cdn_cover:       _pendingCdn.cover },
+        ..._pendingCdn.screenshots?.length && { cdn_screenshots: _pendingCdn.screenshots }
       };
 
       const index = await GitHub.readGist(CONFIG.GIST_INDEX_ID, 'index.json');
