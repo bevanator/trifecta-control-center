@@ -1,9 +1,5 @@
 // Trifecta Asset Manager — Unity 6 Editor Window
 //
-// Dependencies:
-//   BCrypt.Net-Next — add via Package Manager → Add package from git URL:
-//   https://github.com/BcryptNet/bcrypt.net.git#4.0.3
-//
 // Open via Window → Trifecta → Asset Manager
 
 using System;
@@ -353,7 +349,7 @@ namespace TrifectaStudios.AssetManager
                 var creds = JsonConvert.DeserializeObject<CredentialsFile>(json);
                 var user = creds?.users?.Find(u => u.username == _username);
 
-                if (user == null || !BCrypt.Net.BCrypt.Verify(_password, user.hash))
+                if (user == null || !VerifyPassword(_password, user.hash))
                 {
                     _loginError = "Invalid username or password.";
                     _state = ViewState.Login; Repaint(); return;
@@ -537,6 +533,15 @@ namespace TrifectaStudios.AssetManager
             var sig = rsa.SignData(Encoding.UTF8.GetBytes(input), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             return B64Url(sig);
         }
+
+        static string HashPassword(string password)
+        {
+            var salt = Encoding.UTF8.GetBytes("trifecta-static-salt");
+            using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, 100000, HashAlgorithmName.SHA256);
+            return Convert.ToBase64String(pbkdf2.GetBytes(32));
+        }
+
+        static bool VerifyPassword(string password, string hash) => HashPassword(password) == hash;
 
         static Texture2D BytesToTexture(byte[] bytes)
         {

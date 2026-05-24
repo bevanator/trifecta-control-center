@@ -151,7 +151,7 @@ const CredentialsPage = (() => {
     try {
       let hash = existing?.hash || '';
       if (password) {
-        hash = await bcrypt.hash(password, 10);
+        hash = await hashPassword(password);
       }
 
       if (existing) {
