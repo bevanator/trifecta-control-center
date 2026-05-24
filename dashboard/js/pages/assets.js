@@ -3,6 +3,7 @@ const AssetsPage = (() => {
   let _filter = '';
   let _tagFilter = '';
   let _sort = 'name-asc';
+  let _view = 'list';
   let _scanStatus = {};
   let _pendingCdn = { cover: null, screenshots: [] };
 
@@ -45,6 +46,10 @@ const AssetsPage = (() => {
           <option value="ready-first"   ${_sort==='ready-first'   ?'selected':''}>Ready first</option>
           <option value="missing-first" ${_sort==='missing-first' ?'selected':''}>Missing first</option>
         </select>
+        <div style="display:flex;gap:2px">
+          <button class="icon-btn${_view==='list'?' active':''}" id="view-list" title="List view"><i class="ti ti-list"></i></button>
+          <button class="icon-btn${_view==='grid'?' active':''}" id="view-grid" title="Grid view"><i class="ti ti-layout-grid"></i></button>
+        </div>
         <div id="tag-filters" style="display:flex;gap:4px;flex-wrap:wrap"></div>
       </div>
       <div class="content" id="asset-list-wrap">
@@ -62,6 +67,16 @@ const AssetsPage = (() => {
       _sort = e.target.value;
       renderList();
       sortedAssets().forEach(a => scanAsset(a));
+    });
+    document.getElementById('view-list').addEventListener('click', () => {
+      _view = 'list'; renderList(); sortedAssets().forEach(a => scanAsset(a));
+      document.getElementById('view-list')?.classList.add('active');
+      document.getElementById('view-grid')?.classList.remove('active');
+    });
+    document.getElementById('view-grid').addEventListener('click', () => {
+      _view = 'grid'; renderList(); sortedAssets().forEach(a => scanAsset(a));
+      document.getElementById('view-grid')?.classList.add('active');
+      document.getElementById('view-list')?.classList.remove('active');
     });
 
     await loadAssets();
@@ -157,7 +172,10 @@ const AssetsPage = (() => {
       return;
     }
 
-    wrap.innerHTML = `<div class="asset-list" id="asset-list">${list.map(rowHtml).join('')}</div>`;
+    const html = _view === 'grid'
+      ? `<div class="asset-grid" id="asset-list">${list.map(cardHtml).join('')}</div>`
+      : `<div class="asset-list" id="asset-list">${list.map(rowHtml).join('')}</div>`;
+    wrap.innerHTML = html;
     document.getElementById('asset-list').addEventListener('click', handleRowClick);
   }
 
@@ -199,6 +217,48 @@ const AssetsPage = (() => {
           <button class="icon-btn icon-btn-danger" data-action="delete" title="Delete">
             <i class="ti ti-trash"></i>
           </button>
+        </div>
+      </div>`;
+  }
+
+  function cardHtml(a) {
+    const tags = (a.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
+    const hasStore  = !!a.asset_store_url;
+    const hasFolder = !!a.drive_folder_id;
+    const color = thumbColor(a.name);
+
+    return `
+      <div class="asset-card" data-id="${esc(a.id)}">
+        <div class="asset-card-thumb thumb-${color}" id="thumb-${esc(a.id)}">${esc(initials(a.name))}</div>
+        <div class="asset-card-body">
+          <div class="asset-card-name">${esc(a.name)}</div>
+          <div class="asset-card-pub">${esc(a.publisher || '')}</div>
+          <div class="asset-card-tags">${tags}</div>
+        </div>
+        <div class="asset-card-strip" id="strip-${esc(a.id)}">
+          <div class="img-preview loading"></div>
+        </div>
+        <div class="asset-card-footer">
+          <span class="badge badge-missing" id="status-${esc(a.id)}">
+            <i class="ti ti-loader"></i> Scanning
+          </span>
+          <div class="actions">
+            <button class="icon-btn${!hasStore ? ' dim' : ''}" data-action="store" title="Asset Store">
+              <i class="ti ti-external-link"></i>
+            </button>
+            <button class="icon-btn${!hasFolder ? ' dim' : ''}" data-action="drive" title="Drive folder">
+              <i class="ti ti-upload"></i>
+            </button>
+            <button class="icon-btn${!hasFolder ? ' dim' : ''}" data-action="refresh" title="Refresh">
+              <i class="ti ti-refresh"></i>
+            </button>
+            <button class="icon-btn" data-action="edit" title="Edit">
+              <i class="ti ti-edit"></i>
+            </button>
+            <button class="icon-btn icon-btn-danger" data-action="delete" title="Delete">
+              <i class="ti ti-trash"></i>
+            </button>
+          </div>
         </div>
       </div>`;
   }
