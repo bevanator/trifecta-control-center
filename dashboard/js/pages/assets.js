@@ -7,6 +7,8 @@ const AssetsPage = (() => {
   let _scanStatus = {};
   let _pendingCdn = { cover: null, screenshots: [] };
 
+  function fixUrl(u) { return u && u.startsWith('//') ? 'https:' + u : u; }
+
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -413,7 +415,7 @@ const AssetsPage = (() => {
       const current = document.getElementById(`thumb-${assetId}`);
       if (current) { current.innerHTML = ''; current.appendChild(img); }
     };
-    img.src = url;
+    img.src = fixUrl(url);
   }
 
   function clearThumb(assetId) {
@@ -446,7 +448,7 @@ const AssetsPage = (() => {
     el.innerHTML = show.map((_, i) =>
       `<div class="img-preview loading" id="ss-${assetId}-${i}"></div>`
     ).join('') + (extra > 0 ? `<div class="img-more">+${extra}</div>` : '');
-    show.forEach((url, i) => loadIntoPreview(`ss-${assetId}-${i}`, url));
+    show.forEach((url, i) => loadIntoPreview(`ss-${assetId}-${i}`, fixUrl(url)));
   }
 
   function clearStrip(assetId) {
@@ -627,7 +629,7 @@ const AssetsPage = (() => {
       }
 
       // Store CDN data
-      _pendingCdn = { cover: coverUrl || null, screenshots: screenshotUrls };
+      _pendingCdn = { cover: fixUrl(coverUrl) || null, screenshots: screenshotUrls.map(fixUrl) };
       updateCdnIndicator();
 
       const filled = [name, publisher, description, price].filter(Boolean).length;
